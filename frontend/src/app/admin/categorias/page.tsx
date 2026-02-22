@@ -1,0 +1,464 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  FolderTree,
+  Tag,
+  Save,
+  X,
+} from "lucide-react";
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getTags,
+  createTag,
+  deleteTag,
+} from "@/lib/api";
+import type { Category, Tag as TagType } from "@/types";
+
+export default function CategoriasPage() {
+  // Categories state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [catLoading, setCatLoading] = useState(true);
+  const [catError, setCatError] = useState<string | null>(null);
+  const [showCatForm, setShowCatForm] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<number | null>(null);
+  const [catName, setCatName] = useState("");
+  const [catDescription, setCatDescription] = useState("");
+  const [catParentId, setCatParentId] = useState<number | null>(null);
+  const [catSaving, setCatSaving] = useState(false);
+  const [deleteCatConfirmId, setDeleteCatConfirmId] = useState<number | null>(null);
+
+  // Tags state
+  const [tags, setTags] = useState<TagType[]>([]);
+  const [tagLoading, setTagLoading] = useState(true);
+  const [tagError, setTagError] = useState<string | null>(null);
+  const [newTagName, setNewTagName] = useState("");
+  const [tagSaving, setTagSaving] = useState(false);
+  const [deleteTagConfirmId, setDeleteTagConfirmId] = useState<number | null>(null);
+
+  useEffect(() => {
+    loadCategories();
+    loadTags();
+  }, []);
+
+  async function loadCategories() {
+    setCatLoading(true);
+    setCatError(null);
+    try {
+      const data = await getCategories();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setCatError(err.message || "Erro ao carregar categorias");
+    } finally {
+      setCatLoading(false);
+    }
+  }
+
+  async function loadTags() {
+    setTagLoading(true);
+    setTagError(null);
+    try {
+      const data = await getTags();
+      setTags(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setTagError(err.message || "Erro ao carregar tags");
+    } finally {
+      setTagLoading(false);
+    }
+  }
+
+  // ---- Category form ----
+
+  function openCatCreate() {
+    setCatName("");
+    setCatDescription("");
+    setCatParentId(null);
+    setEditingCatId(null);
+    setShowCatForm(true);
+  }
+
+  function openCatEdit(cat: Category) {
+    setCatName(cat.name);
+    setCatDescription(cat.description);
+    setCatParentId(cat.parent_id);
+    setEditingCatId(cat.id);
+    setShowCatForm(true);
+  }
+
+  function closeCatForm() {
+    setShowCatForm(false);
+    setEditingCatId(null);
+    setCatName("");
+    setCatDescription("");
+    setCatParentId(null);
+  }
+
+  async function handleCatSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!catName.trim()) {
+      setCatError("O nome da categoria e obrigatorio.");
+      return;
+    }
+    setCatSaving(true);
+    setCatError(null);
+    try {
+      if (editingCatId) {
+        await updateCategory(editingCatId, {
+          name: catName.trim(),
+          description: catDescription.trim(),
+          parent_id: catParentId,
+        });
+      } else {
+        await createCategory({
+          name: catName.trim(),
+          description: catDescription.trim(),
+          parent_id: catParentId,
+        });
+      }
+      closeCatForm();
+      await loadCategories();
+    } catch (err: any) {
+      setCatError(err.message || "Erro ao salvar categoria");
+    } finally {
+      setCatSaving(false);
+    }
+  }
+
+  async function handleCatDelete(id: number) {
+    setCatError(null);
+    try {
+      await deleteCategory(id);
+      setDeleteCatConfirmId(null);
+      await loadCategories();
+    } catch (err: any) {
+      setCatError(err.message || "Erro ao excluir categoria");
+    }
+  }
+
+  // ---- Tag operations ----
+
+  async function handleTagCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newTagName.trim()) return;
+    setTagSaving(true);
+    setTagError(null);
+    try {
+      await createTag({ name: newTagName.trim() });
+      setNewTagName("");
+      await loadTags();
+    } catch (err: any) {
+      setTagError(err.message || "Erro ao criar tag");
+    } finally {
+      setTagSaving(false);
+    }
+  }
+
+  async function handleTagDelete(id: number) {
+    setTagError(null);
+    try {
+      await deleteTag(id);
+      setDeleteTagConfirmId(null);
+      await loadTags();
+    } catch (err: any) {
+      setTagError(err.message || "Erro ao excluir tag");
+    }
+  }
+
+  return (
+    <div className="p-8 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <Link
+          href="/admin"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+        >
+          <ArrowLeft size={16} />
+          Voltar ao painel
+        </Link>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Categorias e Tags
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Organize os documentos com categorias hierarquicas e tags.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* ─── Categories Section ─── */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FolderTree size={20} className="text-indigo-600" />
+              <h2 className="text-lg font-semibold text-gray-900">
+                Categorias
+              </h2>
+            </div>
+            <button
+              onClick={openCatCreate}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              <Plus size={16} />
+              Nova
+            </button>
+          </div>
+
+          {catError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-sm text-red-700">{catError}</p>
+            </div>
+          )}
+
+          {/* Category form */}
+          {showCatForm && (
+            <div className="card mb-4">
+              <form onSubmit={handleCatSubmit} className="space-y-4">
+                <div>
+                  <label className="label-field">Nome</label>
+                  <input
+                    type="text"
+                    value={catName}
+                    onChange={(e) => setCatName(e.target.value)}
+                    placeholder="Ex: Qualidade"
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Descricao</label>
+                  <input
+                    type="text"
+                    value={catDescription}
+                    onChange={(e) => setCatDescription(e.target.value)}
+                    placeholder="Descricao da categoria"
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Categoria Pai</label>
+                  <select
+                    value={catParentId ?? ""}
+                    onChange={(e) =>
+                      setCatParentId(
+                        e.target.value ? Number(e.target.value) : null
+                      )
+                    }
+                    className="input-field"
+                  >
+                    <option value="">Nenhuma (raiz)</option>
+                    {categories
+                      .filter((c) => c.id !== editingCatId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={catSaving}
+                    className="btn-primary text-sm"
+                  >
+                    {catSaving ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Save size={16} />
+                    )}
+                    {editingCatId ? "Atualizar" : "Criar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeCatForm}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Categories list */}
+          {catLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2
+                size={24}
+                className="animate-spin text-indigo-600"
+              />
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="card text-center py-8">
+              <FolderTree
+                size={36}
+                className="mx-auto mb-3 text-gray-300"
+              />
+              <p className="text-sm text-gray-500">
+                Nenhuma categoria cadastrada.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {categories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">
+                      {cat.name}
+                    </p>
+                    {cat.description && (
+                      <p className="text-xs text-gray-500 truncate">
+                        {cat.description}
+                      </p>
+                    )}
+                    {cat.parent_id && (
+                      <p className="text-xs text-indigo-500 mt-0.5">
+                        Pai:{" "}
+                        {categories.find((c) => c.id === cat.parent_id)
+                          ?.name || `ID ${cat.parent_id}`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 ml-3">
+                    <button
+                      onClick={() => openCatEdit(cat)}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 transition-colors"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    {deleteCatConfirmId === cat.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleCatDelete(cat.id)}
+                          className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-600 hover:bg-red-200 transition-colors font-medium"
+                        >
+                          Sim
+                        </button>
+                        <button
+                          onClick={() => setDeleteCatConfirmId(null)}
+                          className="rounded-lg px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 transition-colors"
+                        >
+                          Nao
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteCatConfirmId(cat.id)}
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ─── Tags Section ─── */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Tag size={20} className="text-indigo-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Tags</h2>
+          </div>
+
+          {tagError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-sm text-red-700">{tagError}</p>
+            </div>
+          )}
+
+          {/* Tag create form */}
+          <form
+            onSubmit={handleTagCreate}
+            className="flex gap-2 mb-4"
+          >
+            <input
+              type="text"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              placeholder="Nome da nova tag"
+              className="input-field flex-1"
+              disabled={tagSaving}
+            />
+            <button
+              type="submit"
+              disabled={tagSaving || !newTagName.trim()}
+              className="btn-primary text-sm py-1.5 px-3"
+            >
+              {tagSaving ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Plus size={16} />
+              )}
+              Criar
+            </button>
+          </form>
+
+          {/* Tags list */}
+          {tagLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2
+                size={24}
+                className="animate-spin text-indigo-600"
+              />
+            </div>
+          ) : tags.length === 0 ? (
+            <div className="card text-center py-8">
+              <Tag size={36} className="mx-auto mb-3 text-gray-300" />
+              <p className="text-sm text-gray-500">
+                Nenhuma tag cadastrada.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <div
+                  key={tag.id}
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 shadow-sm"
+                >
+                  <span className="text-sm text-gray-700">{tag.name}</span>
+                  {deleteTagConfirmId === tag.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleTagDelete(tag.id)}
+                        className="text-xs text-red-600 font-medium hover:underline"
+                      >
+                        Sim
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        onClick={() => setDeleteTagConfirmId(null)}
+                        className="text-xs text-gray-400 hover:underline"
+                      >
+                        Nao
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteTagConfirmId(tag.id)}
+                      className="rounded-full p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

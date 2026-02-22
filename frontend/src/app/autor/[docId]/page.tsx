@@ -1,0 +1,513 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  FileText,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Download,
+  RefreshCw,
+  SkipForward,
+  Paintbrush,
+  Loader2,
+  AlertCircle,
+  FileDown,
+  History,
+} from "lucide-react";
+import {
+  getDocument,
+  getAnalysis,
+  analyzeDocument,
+  formatDocument,
+  skipAiApproval,
+  resubmitDocument,
+  generateChangelog,
+  getExportUrl,
+} from "@/lib/api";
+import type {
+  DocumentWithVersions,
+  DocumentVersion,
+  AIAnalysis,
+  Changelog,
+} from "@/types";
+import AIFeedback from "@/components/AIFeedback";
+import ChangelogViewer from "@/components/ChangelogViewer";
+import DocumentPreview from "@/components/DocumentPreview";
+import DocumentUpload from "@/components/DocumentUpload";
+
+export default function DocumentDetail() {
+  const params = useParams();
+  const router = useRouter();
+  const docCode = params.docId as string;
+
+  const [document, setDocument] = useState<DocumentWithVersions | null>(null);
+  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
+  const [changelog, setChangelog] = useState<Changelog | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [resubmitFile, setResubmitFile] = useState<File | null>(null);
+  const [showResubmit, setShowResubmit] = useState(false);
+
+  useEffect(() => {
+    loadDocument();
+  }, [docCode]);
+
+  async function loadDocument() {
+    setLoading(true);
+    setError(null);
+    try {
+      const doc = await getDocument(docCode);
+      setDocument(doc);
+
+      // Try to load analysis for current version
+      if (doc.versions && doc.versions.length > 0) {
+        const currentVersion = doc.versions[doc.versions.length - 1];
+        try {
+          const anal = await getAnalysis(currentVersion.id);
+          setAnalysis(anal);
+        } catch {
+          setAnalysis(null);
+        }
+        try {
+          const cl = await generateChangelog(currentVersion.id);
+          setChangelog(cl);
+        } catch {
+          setChangelog(null);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao carregar documento");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getCurrentVersion(): DocumentVersion | null {
+    if (!document?.versions || document.versions.length === 0) return null;
+    return document.versions[document.versions.length - 1];
+  }
+
+  async function handleAnalyze() {
+    const version = getCurrentVersion();
+    if (!version) return;
+    setActionLoading("analyze");
+    try {
+      const anal = await analyzeDocument(version.id);
+      setAnalysis(anal);
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro ao analisar documento");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleFormat() {
+    const version = getCurrentVersion();
+    if (!version) return;
+    setActionLoading("format");
+    try {
+      await formatDocument(version.id);
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro ao formatar documento");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleSkipAi() {
+    setActionLoading("skip");
+    try {
+      await skipAiApproval(docCode);
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro ao pular aprovacao da IA");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleResubmit() {
+    if (!resubmitFile) return;
+    setActionLoading("resubmit");
+    try {
+      await resubmitDocument(docCode, resubmitFile, "autor");
+      setResubmitFile(null);
+      setShowResubmit(false);
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro ao reenviar documento");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function getStatusBadge(status: string) {
+    switch (status) {
+      case "approved":
+        return (
+          <span className="badge-success flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <CheckCircle2 size={14} />
+            Aprovado
+          </span>
+        );
+      case "rejected":
+        return (
+          <span className="badge-danger flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <XCircle size={14} />
+            Rejeitado
+          </span>
+        );
+      case "pending_analysis":
+        return (
+          <span className="badge-warning flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <Clock size={14} />
+            Analise Pendente
+          </span>
+        );
+      case "pending_review":
+        return (
+          <span className="badge-info flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <AlertCircle size={14} />
+            Revisao Pendente
+          </span>
+        );
+      case "formatted":
+        return (
+          <span className="badge-success flex items-center gap-1.5 px-3 py-1.5 text-sm">
+            <CheckCircle2 size={14} />
+            Formatado
+          </span>
+        );
+      default:
+        return <span className="badge-neutral px-3 py-1.5 text-sm">{status}</span>;
+    }
+  }
+
+  function formatDate(dateStr: string): string {
+    return new Date(dateStr).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 size={32} className="animate-spin text-indigo-600" />
+        <span className="ml-3 text-sm text-gray-500">
+          Carregando documento...
+        </span>
+      </div>
+    );
+  }
+
+  if (error && !document) {
+    return (
+      <div className="p-8 max-w-3xl mx-auto">
+        <Link
+          href="/autor"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+        >
+          <ArrowLeft size={16} />
+          Voltar ao painel
+        </Link>
+        <div className="card text-center py-12">
+          <AlertCircle size={48} className="mx-auto mb-4 text-red-400" />
+          <h3 className="text-lg font-medium text-gray-900">
+            Erro ao carregar documento
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">{error}</p>
+          <button onClick={loadDocument} className="btn-primary mt-6">
+            <RefreshCw size={18} />
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!document) return null;
+
+  const currentVersion = getCurrentVersion();
+  const isRejected = document.status === "rejected";
+  const isApproved =
+    document.status === "approved" || analysis?.approved === true;
+  const isPendingAnalysis = document.status === "pending_analysis";
+
+  return (
+    <div className="p-8 max-w-5xl mx-auto">
+      {/* Back link */}
+      <Link
+        href="/autor"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-6"
+      >
+        <ArrowLeft size={16} />
+        Voltar ao painel
+      </Link>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Document header */}
+      <div className="card mb-6">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100">
+              <FileText size={24} className="text-indigo-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-xl font-bold text-gray-900">
+                  {document.title}
+                </h1>
+                {getStatusBadge(document.status)}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+                <span>
+                  Codigo: <strong className="text-gray-700">{document.code}</strong>
+                </span>
+                <span>
+                  Versao: <strong className="text-gray-700">v{document.current_version}</strong>
+                </span>
+                <span>Criado em: {formatDate(document.created_at)}</span>
+              </div>
+              {document.tags && document.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {document.tags.map((tag) => (
+                    <span key={tag} className="badge-neutral">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="card mb-6">
+        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">
+          Acoes
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          {isPendingAnalysis && (
+            <button
+              onClick={handleAnalyze}
+              disabled={actionLoading !== null}
+              className="btn-primary"
+            >
+              {actionLoading === "analyze" ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <RefreshCw size={18} />
+              )}
+              Executar Analise IA
+            </button>
+          )}
+
+          {isRejected && (
+            <>
+              <button
+                onClick={() => setShowResubmit(!showResubmit)}
+                disabled={actionLoading !== null}
+                className="btn-primary"
+              >
+                <RefreshCw size={18} />
+                Re-submeter
+              </button>
+              <button
+                onClick={handleSkipAi}
+                disabled={actionLoading !== null}
+                className="btn-secondary"
+              >
+                {actionLoading === "skip" ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <SkipForward size={18} />
+                )}
+                Prosseguir sem aprovacao da IA
+              </button>
+            </>
+          )}
+
+          {isApproved && (
+            <button
+              onClick={handleFormat}
+              disabled={actionLoading !== null}
+              className="btn-primary"
+            >
+              {actionLoading === "format" ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Paintbrush size={18} />
+              )}
+              Formatar Documento
+            </button>
+          )}
+
+          {/* Download links */}
+          {currentVersion?.formatted_file_path_docx && (
+            <a
+              href={getExportUrl(currentVersion.id, "docx")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-success"
+            >
+              <FileDown size={18} />
+              Baixar DOCX
+            </a>
+          )}
+          {currentVersion?.formatted_file_path_pdf && (
+            <a
+              href={getExportUrl(currentVersion.id, "pdf")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-success"
+            >
+              <FileDown size={18} />
+              Baixar PDF
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Resubmit form */}
+      {showResubmit && (
+        <div className="card mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Re-submeter Documento
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Selecione uma nova versao do arquivo para re-analise.
+          </p>
+          <DocumentUpload
+            onFileSelect={setResubmitFile}
+            selectedFile={resubmitFile}
+            uploading={actionLoading === "resubmit"}
+            onClear={() => setResubmitFile(null)}
+          />
+          <div className="mt-4 flex gap-3">
+            <button
+              onClick={handleResubmit}
+              disabled={!resubmitFile || actionLoading !== null}
+              className="btn-primary"
+            >
+              {actionLoading === "resubmit" ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <RefreshCw size={18} />
+              )}
+              Enviar nova versao
+            </button>
+            <button
+              onClick={() => {
+                setShowResubmit(false);
+                setResubmitFile(null);
+              }}
+              className="btn-secondary"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Analysis */}
+      {analysis && (
+        <div className="mb-6">
+          <AIFeedback analysis={analysis} />
+        </div>
+      )}
+
+      {/* Changelog */}
+      {changelog && (
+        <div className="mb-6">
+          <ChangelogViewer changelog={changelog} />
+        </div>
+      )}
+
+      {/* Document preview */}
+      {currentVersion?.extracted_text && (
+        <div className="mb-6">
+          <DocumentPreview text={currentVersion.extracted_text} />
+        </div>
+      )}
+
+      {/* Version history */}
+      {document.versions && document.versions.length > 0 && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <History size={20} className="text-indigo-600" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              Historico de Versoes
+            </h3>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Versao
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    IA
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Data
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {[...document.versions].reverse().map((v) => (
+                  <tr key={v.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      v{v.version_number}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {getStatusBadge(v.status)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {v.ai_approved === true && (
+                        <CheckCircle2
+                          size={18}
+                          className="text-green-500"
+                        />
+                      )}
+                      {v.ai_approved === false && (
+                        <XCircle size={18} className="text-red-500" />
+                      )}
+                      {v.ai_approved === null && (
+                        <Clock size={18} className="text-gray-400" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {formatDate(v.submitted_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
