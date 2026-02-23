@@ -16,6 +16,8 @@ import type {
   SafetyDetectionResult,
   DocumentTemplate,
   TemplatePlaceholderPreview,
+  ScanResponse,
+  ImportResponse,
 } from "@/types";
 
 const API_URL =
@@ -540,4 +542,20 @@ export function getExportUrl(
   format: "docx" | "pdf"
 ): string {
   return `${API_URL}/api/export/${versionId}/${format}`;
+}
+
+// ─── Bulk Import ─────────────────────────────────────────────
+
+export async function scanImportFolder(): Promise<ScanResponse> {
+  return request("/api/import/scan");
+}
+
+export async function executeImport(
+  excludeCodes: string[] = []
+): Promise<ImportResponse> {
+  return request("/api/import/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ exclude_codes: excludeCodes }),
+  });
 }

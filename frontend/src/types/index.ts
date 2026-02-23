@@ -191,3 +191,63 @@ export interface TemplatePlaceholderPreview {
   document_type: string;
   placeholders: string[];
 }
+
+// ─── Bulk Import ──────────────────────────────────────────
+
+export interface ParsedFileItem {
+  filename: string;
+  document_type: string;
+  sequential_number: number;
+  revision_number: number;
+  title: string;
+  code: string;
+  extension: string;
+  file_size_bytes: number;
+}
+
+export interface ParseErrorItem {
+  filename: string;
+  reason: string;
+}
+
+export interface ConflictItem {
+  filename: string;
+  code: string;
+  existing_document_id: number;
+  existing_title: string;
+  existing_status: string;
+}
+
+export interface GroupedDocument {
+  document_type: string;
+  sequential_number: number;
+  title: string;
+  latest_revision: number;
+  revisions: ParsedFileItem[];
+  will_import_as: string;
+  conflict: ConflictItem | null;
+}
+
+export interface ScanResponse {
+  total_files: number;
+  parsed_count: number;
+  error_count: number;
+  conflict_count: number;
+  grouped_documents: GroupedDocument[];
+  parse_errors: ParseErrorItem[];
+}
+
+export interface ImportedDocumentResult {
+  code: string;
+  title: string;
+  status: string;
+  master_list_code: string | null;
+  error_message: string | null;
+}
+
+export interface ImportResponse {
+  total_imported: number;
+  total_skipped: number;
+  total_errors: number;
+  results: ImportedDocumentResult[];
+}

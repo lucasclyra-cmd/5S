@@ -16,6 +16,7 @@ import {
   LogOut,
   BookOpen,
   Users,
+  FolderInput,
 } from "lucide-react";
 
 interface NavSection {
@@ -88,6 +89,11 @@ const navByProfile: Record<string, NavSection[]> = {
           label: "Aprovadores Padrão",
           href: "/admin/aprovadores",
           icon: <Users size={18} />,
+        },
+        {
+          label: "Importar Documentos",
+          href: "/admin/importar",
+          icon: <FolderInput size={18} />,
         },
       ],
     },
