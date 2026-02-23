@@ -1,18 +1,38 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, Loader2, X } from "lucide-react";
+import { ArrowLeft, Send, Loader2, X, FileText } from "lucide-react";
 import Link from "next/link";
 import DocumentUpload from "@/components/DocumentUpload";
-import { uploadDocument, getCategories, getTags } from "@/lib/api";
+import { uploadDocument, getCategories, getTags, getNextCode } from "@/lib/api";
 import type { Category, Tag } from "@/types";
+
+const DOCUMENT_TYPES = [
+  {
+    value: "PQ",
+    label: "PQ - Procedimento da Qualidade",
+    description: "Define padrões e procedimentos do sistema de qualidade",
+  },
+  {
+    value: "IT",
+    label: "IT - Instrução de Trabalho",
+    description: "Descreve atividades operacionais com detalhes técnicos",
+  },
+  {
+    value: "RQ",
+    label: "RQ - Registro da Qualidade",
+    description: "Modelo de formulário para registro de informações",
+  },
+];
 
 export default function SubmeterDocumento() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [code, setCode] = useState("");
+  const [documentType, setDocumentType] = useState("");
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [sector, setSector] = useState("");
   const [categoryId, setCategoryId] = useState<number | undefined>(undefined);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -20,10 +40,31 @@ export default function SubmeterDocumento() {
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingCode, setLoadingCode] = useState(false);
 
   useEffect(() => {
     loadMetadata();
   }, []);
+
+  const fetchNextCode = useCallback(async (type: string) => {
+    if (!type) {
+      setPreviewCode(null);
+      return;
+    }
+    setLoadingCode(true);
+    try {
+      const result = await getNextCode(type);
+      setPreviewCode(result.code);
+    } catch {
+      setPreviewCode(null);
+    } finally {
+      setLoadingCode(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNextCode(documentType);
+  }, [documentType, fetchNextCode]);
 
   async function loadMetadata() {
     try {
@@ -63,8 +104,8 @@ export default function SubmeterDocumento() {
       setError("Selecione um arquivo para enviar.");
       return;
     }
-    if (!code.trim()) {
-      setError("Preencha o código do documento.");
+    if (!documentType) {
+      setError("Selecione o tipo do documento.");
       return;
     }
     if (!title.trim()) {
@@ -77,11 +118,12 @@ export default function SubmeterDocumento() {
 
     try {
       const result = await uploadDocument(file, {
-        code: code.trim(),
+        document_type: documentType,
         title: title.trim(),
         category_id: categoryId,
         tags: selectedTags,
         created_by_profile: "autor",
+        sector: sector.trim() || undefined,
       });
       router.push(`/autor/${result.document.code}`);
     } catch (err: any) {
@@ -137,24 +179,71 @@ export default function SubmeterDocumento() {
           />
         </div>
 
-        {/* Code */}
+        {/* Document Type */}
         <div>
-          <label htmlFor="code" className="label-field">
-            Código do Documento
+          <label htmlFor="document-type" className="label-field">
+            Tipo de Documento
           </label>
-          <input
-            id="code"
-            type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="Ex: DOC-001, PROC-2024-001"
+          <select
+            id="document-type"
+            value={documentType}
+            onChange={(e) => setDocumentType(e.target.value)}
             className="input-field"
             disabled={uploading}
-          />
-          <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>
-            Identificador único do documento no sistema.
-          </p>
+          >
+            <option value="">Selecione o tipo</option>
+            {DOCUMENT_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+          {documentType && (
+            <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>
+              {DOCUMENT_TYPES.find((t) => t.value === documentType)?.description}
+            </p>
+          )}
         </div>
+
+        {/* Auto-generated Code Preview */}
+        {documentType && (
+          <div
+            style={{
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border)",
+              background: "var(--bg-secondary)",
+              padding: 16,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <FileText size={16} style={{ color: "var(--accent)" }} />
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Código auto-gerado
+              </span>
+            </div>
+            <p
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                color: "var(--text-primary)",
+                fontFamily: "monospace",
+              }}
+            >
+              {loadingCode ? "..." : previewCode || "—"}
+            </p>
+            <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>
+              Gerado automaticamente pelo sistema. Formato: {documentType}-NNN.00
+            </p>
+          </div>
+        )}
 
         {/* Title */}
         <div>
@@ -166,10 +255,29 @@ export default function SubmeterDocumento() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: Procedimento de Segurança do Trabalho"
+            placeholder="Ex: Controle de Informação Documentada"
             className="input-field"
             disabled={uploading}
           />
+        </div>
+
+        {/* Sector */}
+        <div>
+          <label htmlFor="sector" className="label-field">
+            Setor Responsável
+          </label>
+          <input
+            id="sector"
+            type="text"
+            value={sector}
+            onChange={(e) => setSector(e.target.value)}
+            placeholder="Ex: Engenharia de Processos, Qualidade, Produção"
+            className="input-field"
+            disabled={uploading}
+          />
+          <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>
+            Área responsável pela elaboração do documento.
+          </p>
         </div>
 
         {/* Category */}
@@ -252,7 +360,7 @@ export default function SubmeterDocumento() {
         <div style={{ paddingTop: 16, borderTop: "1px solid var(--border)" }}>
           <button
             type="submit"
-            disabled={uploading || !file || !code.trim() || !title.trim()}
+            disabled={uploading || !file || !documentType || !title.trim()}
             className="btn-primary w-full justify-center py-3 text-base"
           >
             {uploading ? (

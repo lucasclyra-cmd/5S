@@ -26,12 +26,14 @@ import {
   resubmitDocument,
   generateChangelog,
   getExportUrl,
+  getApprovalChain,
 } from "@/lib/api";
 import type {
   DocumentWithVersions,
   DocumentVersion,
   AIAnalysis,
   Changelog,
+  ApprovalChain,
 } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
@@ -39,6 +41,8 @@ import AIFeedback from "@/components/AIFeedback";
 import ChangelogViewer from "@/components/ChangelogViewer";
 import DocumentPreview from "@/components/DocumentPreview";
 import DocumentUpload from "@/components/DocumentUpload";
+import ApproverSelector from "@/components/ApproverSelector";
+import ApprovalChainView from "@/components/ApprovalChain";
 
 export default function DocumentDetail() {
   const params = useParams();
@@ -48,6 +52,7 @@ export default function DocumentDetail() {
   const [document, setDocument] = useState<DocumentWithVersions | null>(null);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [changelog, setChangelog] = useState<Changelog | null>(null);
+  const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -79,6 +84,12 @@ export default function DocumentDetail() {
           setChangelog(cl);
         } catch {
           setChangelog(null);
+        }
+        try {
+          const chain = await getApprovalChain(currentVersion.id);
+          setApprovalChain(chain);
+        } catch {
+          setApprovalChain(null);
         }
       }
     } catch (err: any) {
@@ -392,6 +403,29 @@ export default function DocumentDetail() {
           </div>
         </div>
       )}
+
+      {/* Approval Chain - show if exists */}
+      {approvalChain && (
+        <div className="mb-6">
+          <ApprovalChainView
+            chain={approvalChain}
+            onUpdate={setApprovalChain}
+          />
+        </div>
+      )}
+
+      {/* Approval Setup - show when AI approved and no chain yet */}
+      {currentVersion &&
+        (isApproved || document.status === "in_review") &&
+        !approvalChain && (
+          <div className="mb-6">
+            <ApproverSelector
+              versionId={currentVersion.id}
+              documentType={document.document_type}
+              onChainCreated={loadDocument}
+            />
+          </div>
+        )}
 
       {/* AI Analysis */}
       {analysis && (

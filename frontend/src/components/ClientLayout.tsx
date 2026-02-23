@@ -14,6 +14,8 @@ const breadcrumbMap: Record<string, string> = {
   templates: "Templates",
   regras: "Regras de Analise",
   categorias: "Categorias e Tags",
+  "lista-mestra": "Lista Mestra",
+  aprovadores: "Aprovadores Padrão",
 };
 
 function Breadcrumb() {

@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.version import DocumentVersion
 from app.models.workflow import WorkflowQueue
+from app.services import master_list_service
 
 
 async def create_workflow_item(db: AsyncSession, version_id: int) -> WorkflowQueue:
@@ -93,6 +94,10 @@ async def approve_document(db: AsyncSession, version_id: int) -> WorkflowQueue:
             # Update document status to active
             version.document.status = "active"
             version.document.updated_at = datetime.now(timezone.utc)
+            version.document.effective_date = datetime.now(timezone.utc)
+
+            # Add to master list (auto-creates or reactivates entry)
+            await master_list_service.add_to_master_list(db, version.document.id)
 
     await db.flush()
     return item

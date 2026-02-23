@@ -12,7 +12,7 @@ from app.schemas.documents import (
     DocumentUploadResponse,
 )
 from app.schemas.versions import VersionResponse
-from app.services import document_service, versioning_service, workflow_service
+from app.services import document_service, versioning_service, workflow_service, coding_service
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -30,6 +30,11 @@ def _document_to_response(doc) -> DocumentResponse:
         created_at=doc.created_at,
         updated_at=doc.updated_at,
         tags=[tag.name for tag in doc.tags] if doc.tags else [],
+        document_type=doc.document_type,
+        sequential_number=doc.sequential_number,
+        revision_number=doc.revision_number or 0,
+        sector=doc.sector,
+        effective_date=doc.effective_date,
     )
 
 
@@ -44,26 +49,38 @@ async def upload_document(
     metadata: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a new document or new version of an existing document."""
+    """Upload a new document with auto-generated standardized code."""
     try:
         meta = json.loads(metadata)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid metadata JSON")
+        raise HTTPException(status_code=400, detail="JSON de metadados inválido")
 
-    code = meta.get("code")
+    document_type = meta.get("document_type")
     title = meta.get("title")
     created_by_profile = meta.get("created_by_profile", "autor")
 
-    if not code or not title:
-        raise HTTPException(status_code=400, detail="code and title are required in metadata")
+    if not document_type or not title:
+        raise HTTPException(
+            status_code=400,
+            detail="document_type e title são obrigatórios nos metadados",
+        )
+
+    if not coding_service.validate_document_type(document_type):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de documento inválido: '{document_type}'. Use PQ, IT ou RQ.",
+        )
 
     category_id = meta.get("category_id")
     tags = meta.get("tags")
+    sector = meta.get("sector")
 
     try:
         doc, version = await document_service.upload_document(
-            db, file, code, title, category_id, tags, created_by_profile
+            db, file, document_type, title, category_id, tags, created_by_profile, sector
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -71,6 +88,29 @@ async def upload_document(
         document=_document_to_response(doc),
         version=_version_to_response(version),
     )
+
+
+@router.get("/next-code/{document_type}")
+async def get_next_code(
+    document_type: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Preview the next auto-generated code for a document type."""
+    if not coding_service.validate_document_type(document_type):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de documento inválido: '{document_type}'. Use PQ, IT ou RQ.",
+        )
+
+    next_seq = await coding_service.get_next_sequential_number(db, document_type)
+    code = coding_service.generate_code(document_type, next_seq, 0)
+
+    return {
+        "code": code,
+        "document_type": document_type,
+        "sequential_number": next_seq,
+        "revision_number": 0,
+    }
 
 
 @router.get("", response_model=DocumentListResponse)

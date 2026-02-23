@@ -13,6 +13,7 @@ from app.models.document import Document
 from app.models.version import DocumentVersion
 from app.models.config import Tag, DocumentTag, Category
 from app.services.document_parser import extract_text
+from app.services import coding_service
 
 
 async def _save_uploaded_file(file: UploadFile) -> tuple[str, str]:
@@ -39,58 +40,44 @@ async def _save_uploaded_file(file: UploadFile) -> tuple[str, str]:
 async def upload_document(
     db: AsyncSession,
     file: UploadFile,
-    code: str,
+    document_type: str,
     title: str,
     category_id: Optional[int],
     tags: Optional[list[str]],
     profile: str,
+    sector: Optional[str] = None,
 ) -> tuple[Document, DocumentVersion]:
-    """Upload a document file and create/update the Document and DocumentVersion records."""
+    """Upload a new document with auto-generated standardized code."""
+    if not coding_service.validate_document_type(document_type):
+        raise ValueError(f"Tipo de documento inválido: '{document_type}'. Use PQ, IT ou RQ.")
+
     file_path, extracted_text = await _save_uploaded_file(file)
 
-    # Check if document with this code already exists
-    result = await db.execute(
-        select(Document)
-        .options(selectinload(Document.versions), selectinload(Document.tags))
-        .where(Document.code == code)
+    # Auto-generate code
+    seq_number = await coding_service.get_next_sequential_number(db, document_type)
+    code = coding_service.generate_code(document_type, seq_number, 0)
+
+    document = Document(
+        code=code,
+        title=title,
+        category_id=category_id,
+        current_version=1,
+        status="draft",
+        created_by_profile=profile,
+        document_type=document_type,
+        sequential_number=seq_number,
+        revision_number=0,
+        sector=sector,
     )
-    document = result.scalar_one_or_none()
+    db.add(document)
+    await db.flush()
 
-    if document is None:
-        # Create new document
-        document = Document(
-            code=code,
-            title=title,
-            category_id=category_id,
-            current_version=1,
-            status="draft",
-            created_by_profile=profile,
-        )
-        db.add(document)
-        await db.flush()
+    if tags:
+        await _sync_tags(db, document.id, tags)
 
-        # Handle tags
-        if tags:
-            await _sync_tags(db, document.id, tags)
-
-        version_number = 1
-    else:
-        # Update existing document
-        document.title = title
-        if category_id is not None:
-            document.category_id = category_id
-        document.current_version += 1
-        document.updated_at = datetime.now(timezone.utc)
-        version_number = document.current_version
-
-        # Update tags if provided
-        if tags is not None:
-            await _sync_tags(db, document.id, tags)
-
-    # Create version
     version = DocumentVersion(
         document_id=document.id,
-        version_number=version_number,
+        version_number=1,
         original_file_path=file_path,
         extracted_text=extracted_text,
         status="draft",
@@ -99,9 +86,7 @@ async def upload_document(
     db.add(version)
     await db.flush()
 
-    # Refresh to get relationships loaded
     await db.refresh(document, ["tags", "versions"])
-
     return document, version
 
 
@@ -207,7 +192,7 @@ async def resubmit_document(
     file: UploadFile,
     profile: str,
 ) -> tuple[Document, DocumentVersion]:
-    """Create a new version for an existing document."""
+    """Create a new version for an existing document, auto-incrementing revision."""
     document = await get_document_by_code(db, code)
     if document is None:
         raise ValueError(f"Document with code '{code}' not found")
@@ -221,10 +206,17 @@ async def resubmit_document(
 
     file_path, extracted_text = await _save_uploaded_file(file)
 
-    # Increment version
+    # Increment version and revision
     document.current_version += 1
     document.status = "draft"
     document.updated_at = datetime.now(timezone.utc)
+
+    # Auto-increment revision number and update code
+    if document.document_type and document.sequential_number is not None:
+        document.revision_number = (document.revision_number or 0) + 1
+        document.code = coding_service.generate_code(
+            document.document_type, document.sequential_number, document.revision_number
+        )
 
     version = DocumentVersion(
         document_id=document.id,

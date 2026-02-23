@@ -5,61 +5,53 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Plus,
-  Pencil,
   Trash2,
   Loader2,
   LayoutTemplate,
-  Save,
-  X,
+  Eye,
+  FileText,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
-import {
-  getAdminConfigs,
-  createAdminConfig,
-  updateAdminConfig,
-  deleteAdminConfig,
-  getCategories,
-} from "@/lib/api";
-import type { AdminConfig, Category } from "@/types";
+import { getTemplates, getTemplatePlaceholders, deleteTemplate } from "@/lib/api";
+import type { DocumentTemplate, TemplatePlaceholderPreview } from "@/types";
+import TemplateUpload from "@/components/TemplateUpload";
 
-interface TemplateFormData {
-  document_type: string;
-  category_id: number | null;
-  font_family: string;
-  font_size: number;
-  margin_top: number;
-  margin_bottom: number;
-  margin_left: number;
-  margin_right: number;
-  header_text: string;
-  footer_text: string;
-  required_sections: string[];
+function formatDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
 }
 
-const defaultFormData: TemplateFormData = {
-  document_type: "",
-  category_id: null,
-  font_family: "Arial",
-  font_size: 12,
-  margin_top: 2.5,
-  margin_bottom: 2.5,
-  margin_left: 3.0,
-  margin_right: 3.0,
-  header_text: "",
-  footer_text: "",
-  required_sections: [],
-};
+function typeLabel(type: string): string {
+  switch (type) {
+    case "PQ":
+      return "Procedimento da Qualidade";
+    case "IT":
+      return "Instrução de Trabalho";
+    case "RQ":
+      return "Registro da Qualidade";
+    default:
+      return type;
+  }
+}
 
 export default function TemplatesPage() {
-  const [configs, setConfigs] = useState<AdminConfig[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<TemplateFormData>(defaultFormData);
-  const [saving, setSaving] = useState(false);
-  const [sectionInput, setSectionInput] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [previewData, setPreviewData] = useState<TemplatePlaceholderPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -69,12 +61,8 @@ export default function TemplatesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [configsData, catsData] = await Promise.all([
-        getAdminConfigs("template"),
-        getCategories().catch(() => []),
-      ]);
-      setConfigs(Array.isArray(configsData) ? configsData : []);
-      setCategories(Array.isArray(catsData) ? catsData : []);
+      const result = await getTemplates(undefined, false);
+      setTemplates(result.templates);
     } catch (err: any) {
       setError(err.message || "Erro ao carregar templates");
     } finally {
@@ -82,101 +70,10 @@ export default function TemplatesPage() {
     }
   }
 
-  function openCreateForm() {
-    setFormData(defaultFormData);
-    setEditingId(null);
-    setShowForm(true);
-  }
-
-  function openEditForm(config: AdminConfig) {
-    const cd = config.config_data || {};
-    setFormData({
-      document_type: config.document_type || "",
-      category_id: config.category_id,
-      font_family: cd.font_family || "Arial",
-      font_size: cd.font_size || 12,
-      margin_top: cd.margins?.top ?? 2.5,
-      margin_bottom: cd.margins?.bottom ?? 2.5,
-      margin_left: cd.margins?.left ?? 3.0,
-      margin_right: cd.margins?.right ?? 3.0,
-      header_text: cd.header_text || "",
-      footer_text: cd.footer_text || "",
-      required_sections: cd.required_sections || [],
-    });
-    setEditingId(config.id);
-    setShowForm(true);
-  }
-
-  function closeForm() {
-    setShowForm(false);
-    setEditingId(null);
-    setFormData(defaultFormData);
-    setSectionInput("");
-  }
-
-  function addSection() {
-    const trimmed = sectionInput.trim();
-    if (trimmed && !formData.required_sections.includes(trimmed)) {
-      setFormData({
-        ...formData,
-        required_sections: [...formData.required_sections, trimmed],
-      });
-    }
-    setSectionInput("");
-  }
-
-  function removeSection(s: string) {
-    setFormData({
-      ...formData,
-      required_sections: formData.required_sections.filter(
-        (sec) => sec !== s
-      ),
-    });
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-
-    const payload = {
-      config_type: "template",
-      category_id: formData.category_id || null,
-      document_type: formData.document_type || null,
-      config_data: {
-        font_family: formData.font_family,
-        font_size: formData.font_size,
-        margins: {
-          top: formData.margin_top,
-          bottom: formData.margin_bottom,
-          left: formData.margin_left,
-          right: formData.margin_right,
-        },
-        header_text: formData.header_text,
-        footer_text: formData.footer_text,
-        required_sections: formData.required_sections,
-      },
-    };
-
-    try {
-      if (editingId) {
-        await updateAdminConfig(editingId, payload);
-      } else {
-        await createAdminConfig(payload);
-      }
-      closeForm();
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || "Erro ao salvar template");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleDelete(id: number) {
     setError(null);
     try {
-      await deleteAdminConfig(id, "template");
+      await deleteTemplate(id);
       setDeleteConfirmId(null);
       await loadData();
     } catch (err: any) {
@@ -184,10 +81,33 @@ export default function TemplatesPage() {
     }
   }
 
-  function getCategoryName(id: number | null): string {
-    if (!id) return "Todas";
-    const cat = categories.find((c) => c.id === id);
-    return cat ? cat.name : `ID ${id}`;
+  async function handlePreview(id: number) {
+    if (previewData?.template_id === id) {
+      setPreviewData(null);
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const data = await getTemplatePlaceholders(id);
+      setPreviewData(data);
+    } catch (err: any) {
+      setError(err.message || "Erro ao carregar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function handleUploaded() {
+    setShowUpload(false);
+    loadData();
+  }
+
+  // Group by document_type
+  const groupedByType: Record<string, DocumentTemplate[]> = {};
+  for (const t of templates) {
+    const key = t.document_type;
+    if (!groupedByType[key]) groupedByType[key] = [];
+    groupedByType[key].push(t);
   }
 
   return (
@@ -204,17 +124,17 @@ export default function TemplatesPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 style={{ color: "var(--text-primary)" }}>
-              Templates de Formatação
-            </h1>
+            <h1 style={{ color: "var(--text-primary)" }}>Templates de Documento</h1>
             <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
-              Configure modelos de formatação para diferentes tipos de documento.
+              Faça upload de templates .docx ou .odt para formatar documentos automaticamente.
             </p>
           </div>
-          <button onClick={openCreateForm} className="btn-primary">
-            <Plus size={18} />
-            Novo Template
-          </button>
+          {!showUpload && (
+            <button onClick={() => setShowUpload(true)} className="btn-primary">
+              <Plus size={18} />
+              Upload Template
+            </button>
+          )}
         </div>
       </div>
 
@@ -233,254 +153,13 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* Form */}
-      {showForm && (
-        <div className="card mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 style={{ color: "var(--text-primary)" }}>
-              {editingId ? "Editar Template" : "Novo Template"}
-            </h2>
-            <button
-              onClick={closeForm}
-              className="btn-action"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Tipo de Documento</label>
-                <input
-                  type="text"
-                  value={formData.document_type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, document_type: e.target.value })
-                  }
-                  placeholder="Ex: procedimento, instrução"
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="label-field">Categoria</label>
-                <select
-                  value={formData.category_id ?? ""}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      category_id: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                  className="input-field"
-                >
-                  <option value="">Todas as categorias</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Fonte</label>
-                <select
-                  value={formData.font_family}
-                  onChange={(e) =>
-                    setFormData({ ...formData, font_family: e.target.value })
-                  }
-                  className="input-field"
-                >
-                  <option value="Arial">Arial</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="Calibri">Calibri</option>
-                  <option value="Verdana">Verdana</option>
-                  <option value="Helvetica">Helvetica</option>
-                </select>
-              </div>
-              <div>
-                <label className="label-field">Tamanho da Fonte (pt)</label>
-                <input
-                  type="number"
-                  value={formData.font_size}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      font_size: Number(e.target.value),
-                    })
-                  }
-                  min={8}
-                  max={24}
-                  className="input-field"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="label-field">Margens (cm)</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Superior</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.margin_top}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        margin_top: Number(e.target.value),
-                      })
-                    }
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Inferior</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.margin_bottom}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        margin_bottom: Number(e.target.value),
-                      })
-                    }
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Esquerda</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.margin_left}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        margin_left: Number(e.target.value),
-                      })
-                    }
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Direita</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={formData.margin_right}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        margin_right: Number(e.target.value),
-                      })
-                    }
-                    className="input-field"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Texto do Cabeçalho</label>
-                <input
-                  type="text"
-                  value={formData.header_text}
-                  onChange={(e) =>
-                    setFormData({ ...formData, header_text: e.target.value })
-                  }
-                  placeholder="Ex: Nome da Empresa"
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="label-field">Texto do Rodapé</label>
-                <input
-                  type="text"
-                  value={formData.footer_text}
-                  onChange={(e) =>
-                    setFormData({ ...formData, footer_text: e.target.value })
-                  }
-                  placeholder="Ex: Página {page}"
-                  className="input-field"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="label-field">Seções Obrigatórias</label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {formData.required_sections.map((s) => (
-                  <span
-                    key={s}
-                    className="chip"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >
-                    {s}
-                    <button
-                      type="button"
-                      onClick={() => removeSection(s)}
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: "var(--accent-hover)" }}
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={sectionInput}
-                  onChange={(e) => setSectionInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addSection();
-                    }
-                  }}
-                  placeholder="Nome da seção"
-                  className="input-field flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={addSection}
-                  className="btn-secondary"
-                  disabled={!sectionInput.trim()}
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-              <button
-                type="submit"
-                disabled={saving}
-                className="btn-primary"
-              >
-                {saving ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Save size={18} />
-                )}
-                {editingId ? "Atualizar" : "Criar"} Template
-              </button>
-              <button
-                type="button"
-                onClick={closeForm}
-                className="btn-secondary"
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
+      {/* Upload form */}
+      {showUpload && (
+        <div className="mb-6">
+          <TemplateUpload
+            onUploaded={handleUploaded}
+            onCancel={() => setShowUpload(false)}
+          />
         </div>
       )}
 
@@ -491,121 +170,222 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* Templates list */}
-      {!loading && configs.length === 0 && !showForm && (
+      {/* Empty state */}
+      {!loading && templates.length === 0 && !showUpload && (
         <div className="card text-center py-16">
-          <LayoutTemplate size={48} className="mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
-          <h3 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-primary)" }}>
-            Nenhum template configurado
+          <LayoutTemplate
+            size={48}
+            className="mx-auto mb-4"
+            style={{ color: "var(--text-muted)" }}
+          />
+          <h3
+            style={{
+              fontSize: 18,
+              fontWeight: 500,
+              color: "var(--text-primary)",
+            }}
+          >
+            Nenhum template cadastrado
           </h3>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, marginBottom: 24 }}>
-            Crie seu primeiro template de formatação.
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--text-muted)",
+              marginTop: 4,
+              marginBottom: 24,
+            }}
+          >
+            Faça upload de um template .docx ou .odt para começar.
           </p>
-          <button onClick={openCreateForm} className="btn-primary">
+          <button onClick={() => setShowUpload(true)} className="btn-primary">
             <Plus size={18} />
-            Criar Template
+            Upload Template
           </button>
         </div>
       )}
 
-      {!loading && configs.length > 0 && (
-        <div className="space-y-4">
-          {configs.map((config) => {
-            const cd = config.config_data || {};
-            return (
-              <div key={config.id} className="card">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <LayoutTemplate
-                        size={20}
-                        style={{ color: "var(--accent)" }}
-                      />
-                      <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
-                        {config.document_type || "Template Geral"}
-                      </h3>
-                      <span className="badge-info">
-                        {getCategoryName(config.category_id)}
-                      </span>
-                    </div>
-                    <div
-                      className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3"
-                      style={{ fontSize: 13, color: "var(--text-secondary)" }}
-                    >
-                      <div>
-                        <span style={{ color: "var(--text-muted)" }}>Fonte:</span>{" "}
-                        {cd.font_family || "N/A"} {cd.font_size || ""}pt
-                      </div>
-                      <div>
-                        <span style={{ color: "var(--text-muted)" }}>Margens:</span>{" "}
-                        {cd.margins
-                          ? `${cd.margins.top}/${cd.margins.bottom}/${cd.margins.left}/${cd.margins.right}cm`
-                          : "N/A"}
-                      </div>
-                      <div>
-                        <span style={{ color: "var(--text-muted)" }}>Cabeçalho:</span>{" "}
-                        {cd.header_text || "N/A"}
-                      </div>
-                      <div>
-                        <span style={{ color: "var(--text-muted)" }}>Rodapé:</span>{" "}
-                        {cd.footer_text || "N/A"}
-                      </div>
-                    </div>
-                    {cd.required_sections &&
-                      cd.required_sections.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5 items-center">
-                          <span className="section-title" style={{ marginBottom: 0 }}>
-                            Seções:
-                          </span>
-                          {cd.required_sections.map((s: string) => (
-                            <span key={s} className="badge-neutral">
-                              {s}
+      {/* Templates list grouped by type */}
+      {!loading &&
+        templates.length > 0 &&
+        ["PQ", "IT", "RQ"].map((type) => {
+          const group = groupedByType[type];
+          if (!group || group.length === 0) return null;
+          return (
+            <div key={type} className="mb-8">
+              <h2
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  marginBottom: 12,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {typeLabel(type)} ({type})
+              </h2>
+              <div className="space-y-3">
+                {group.map((template) => (
+                  <div key={template.id} className="card">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <FileText
+                            size={20}
+                            style={{ color: template.is_active ? "var(--accent)" : "var(--text-muted)" }}
+                          />
+                          <h3
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 600,
+                              color: "var(--text-primary)",
+                            }}
+                          >
+                            {template.name}
+                          </h3>
+                          {template.is_active ? (
+                            <span className="badge badge-success">
+                              <CheckCircle size={12} />
+                              Ativo
                             </span>
-                          ))}
+                          ) : (
+                            <span className="badge badge-neutral">
+                              <XCircle size={12} />
+                              Inativo
+                            </span>
+                          )}
                         </div>
-                      )}
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={() => openEditForm(config)}
-                      className="btn-action"
-                      title="Editar"
-                    >
-                      <Pencil size={18} />
-                    </button>
-                    {deleteConfirmId === config.id ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleDelete(config.id)}
-                          className="btn-danger"
-                          style={{ padding: "6px 12px", fontSize: 12 }}
+
+                        {template.description && (
+                          <p
+                            style={{
+                              fontSize: 13,
+                              color: "var(--text-secondary)",
+                              marginBottom: 8,
+                            }}
+                          >
+                            {template.description}
+                          </p>
+                        )}
+
+                        <div
+                          className="flex flex-wrap gap-4"
+                          style={{ fontSize: 12, color: "var(--text-muted)" }}
                         >
-                          Confirmar
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(null)}
-                          className="btn-ghost"
-                        >
-                          Cancelar
-                        </button>
+                          <span>
+                            Tipo: <strong>{template.document_type}</strong>
+                          </span>
+                          <span>Criado em: {formatDate(template.created_at)}</span>
+                          {template.section_mapping?.placeholders && (
+                            <span>
+                              Placeholders:{" "}
+                              {template.section_mapping.placeholders.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Placeholder preview */}
+                        {previewData?.template_id === template.id && (
+                          <div
+                            className="mt-4"
+                            style={{
+                              padding: 12,
+                              background: "rgba(95, 145, 230, 0.04)",
+                              borderRadius: "var(--radius-md)",
+                              border: "1px solid rgba(95, 145, 230, 0.15)",
+                            }}
+                          >
+                            <p
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--text-secondary)",
+                                marginBottom: 8,
+                              }}
+                            >
+                              Placeholders encontrados:
+                            </p>
+                            {previewData.placeholders.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {previewData.placeholders.map((p) => (
+                                  <span
+                                    key={p}
+                                    style={{
+                                      fontFamily: "monospace",
+                                      fontSize: 12,
+                                      padding: "2px 8px",
+                                      background: "var(--bg-elevated)",
+                                      borderRadius: "var(--radius-sm)",
+                                      border: "1px solid var(--border)",
+                                      color: "var(--accent)",
+                                    }}
+                                  >
+                                    {`{{${p}}}`}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p
+                                style={{
+                                  fontSize: 12,
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                Nenhum placeholder encontrado no template.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setDeleteConfirmId(config.id)}
-                        className="btn-action"
-                        title="Excluir"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    )}
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <button
+                          onClick={() => handlePreview(template.id)}
+                          className="btn-action"
+                          title="Ver placeholders"
+                          disabled={previewLoading}
+                        >
+                          {previewLoading &&
+                          previewData?.template_id !== template.id ? (
+                            <Loader2 size={18} className="animate-spin" />
+                          ) : (
+                            <Eye size={18} />
+                          )}
+                        </button>
+                        {deleteConfirmId === template.id ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleDelete(template.id)}
+                              className="btn-danger"
+                              style={{ padding: "6px 12px", fontSize: 12 }}
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="btn-ghost"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirmId(template.id)}
+                            className="btn-action"
+                            title="Desativar"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
     </div>
   );
 }

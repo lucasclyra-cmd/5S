@@ -6,8 +6,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   FileText,
-  CheckCircle2,
-  XCircle,
   Loader2,
   AlertCircle,
   RefreshCw,
@@ -15,21 +13,22 @@ import {
 import {
   getDocument,
   getAnalysis,
-  approveDocument,
-  rejectDocument,
   generateChangelog,
+  getApprovalChain,
 } from "@/lib/api";
 import type {
   DocumentWithVersions,
   DocumentVersion,
   AIAnalysis,
   Changelog,
+  ApprovalChain,
 } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 import AIFeedback from "@/components/AIFeedback";
 import ChangelogViewer from "@/components/ChangelogViewer";
 import DocumentPreview from "@/components/DocumentPreview";
+import ApprovalChainView from "@/components/ApprovalChain";
 
 export default function ProcessosReviewPage() {
   const params = useParams();
@@ -39,11 +38,9 @@ export default function ProcessosReviewPage() {
   const [document, setDocument] = useState<DocumentWithVersions | null>(null);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [changelog, setChangelog] = useState<Changelog | null>(null);
+  const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [rejectComments, setRejectComments] = useState("");
-  const [showRejectForm, setShowRejectForm] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -70,6 +67,12 @@ export default function ProcessosReviewPage() {
         } catch {
           setChangelog(null);
         }
+        try {
+          const chain = await getApprovalChain(currentVersion.id);
+          setApprovalChain(chain);
+        } catch {
+          setApprovalChain(null);
+        }
       }
     } catch (err: any) {
       setError(err.message || "Erro ao carregar documento");
@@ -83,33 +86,11 @@ export default function ProcessosReviewPage() {
     return document.versions[document.versions.length - 1];
   }
 
-  async function handleApprove() {
-    const version = getCurrentVersion();
-    if (!version) return;
-    setActionLoading("approve");
-    try {
-      await approveDocument(version.id);
-      router.push("/processos");
-    } catch (err: any) {
-      setError(err.message || "Erro ao aprovar documento");
-      setActionLoading(null);
-    }
-  }
-
-  async function handleReject() {
-    const version = getCurrentVersion();
-    if (!version) return;
-    if (!rejectComments.trim()) {
-      setError("Adicione comentários para a rejeição.");
-      return;
-    }
-    setActionLoading("reject");
-    try {
-      await rejectDocument(version.id, rejectComments.trim());
-      router.push("/processos");
-    } catch (err: any) {
-      setError(err.message || "Erro ao rejeitar documento");
-      setActionLoading(null);
+  function handleChainUpdate(updatedChain: ApprovalChain) {
+    setApprovalChain(updatedChain);
+    // Reload document if chain resolved
+    if (updatedChain.status === "approved" || updatedChain.status === "rejected") {
+      loadDocument();
     }
   }
 
@@ -163,7 +144,7 @@ export default function ProcessosReviewPage() {
         style={{ fontSize: 13, color: "var(--text-muted)" }}
       >
         <ArrowLeft size={16} />
-        Voltar a fila
+        Voltar à fila
       </Link>
 
       {/* Error banner */}
@@ -216,6 +197,11 @@ export default function ProcessosReviewPage() {
               <span>
                 Autor: <strong style={{ color: "var(--text-primary)" }}>{document.created_by_profile}</strong>
               </span>
+              {document.sector && (
+                <span>
+                  Setor: <strong style={{ color: "var(--text-primary)" }}>{document.sector}</strong>
+                </span>
+              )}
               <span>Criado em: {formatDateTime(document.created_at)}</span>
             </div>
             {document.tags && document.tags.length > 0 && (
@@ -231,74 +217,31 @@ export default function ProcessosReviewPage() {
         </div>
       </div>
 
-      {/* Review actions */}
-      <div className="card mb-6">
-        <h3 className="section-title">
-          Decisão de Revisão
-        </h3>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleApprove}
-            disabled={actionLoading !== null}
-            className="btn-success"
-          >
-            {actionLoading === "approve" ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <CheckCircle2 size={18} />
-            )}
-            Aprovar
-          </button>
-          <button
-            onClick={() => setShowRejectForm(!showRejectForm)}
-            disabled={actionLoading !== null}
-            className="btn-danger"
-          >
-            <XCircle size={18} />
-            Rejeitar
-          </button>
+      {/* Approval Chain */}
+      {approvalChain && (
+        <div className="mb-6">
+          <ApprovalChainView
+            chain={approvalChain}
+            onUpdate={handleChainUpdate}
+            isProcessos
+          />
         </div>
+      )}
 
-        {/* Reject form */}
-        {showRejectForm && (
-          <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-            <label className="label-field">Comentários da Rejeição</label>
-            <textarea
-              value={rejectComments}
-              onChange={(e) => setRejectComments(e.target.value)}
-              placeholder="Explique o motivo da rejeição..."
-              rows={4}
-              className="input-field resize-none"
-              disabled={actionLoading !== null}
-            />
-            <div className="mt-3 flex gap-3">
-              <button
-                onClick={handleReject}
-                disabled={
-                  actionLoading !== null || !rejectComments.trim()
-                }
-                className="btn-danger"
-              >
-                {actionLoading === "reject" ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <XCircle size={18} />
-                )}
-                Confirmar Rejeição
-              </button>
-              <button
-                onClick={() => {
-                  setShowRejectForm(false);
-                  setRejectComments("");
-                }}
-                className="btn-secondary"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* No chain yet message */}
+      {!approvalChain && document.status === "in_review" && (
+        <div
+          className="card mb-6 text-center py-8"
+          style={{ borderStyle: "dashed" }}
+        >
+          <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+            A cadeia de aprovação ainda não foi configurada pelo autor.
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+            O autor precisa configurar os aprovadores para este documento.
+          </p>
+        </div>
+      )}
 
       {/* AI Analysis */}
       {analysis && (

@@ -1,4 +1,7 @@
 import json
+import logging
+import os
+from datetime import datetime, timezone
 from typing import Optional
 
 from openai import AsyncOpenAI
@@ -11,7 +14,10 @@ from app.models.version import DocumentVersion
 from app.models.analysis import AIAnalysis
 from app.models.changelog import Changelog
 from app.models.config import AdminConfig
+from app.models.template import DocumentTemplate
 from app.services.ai_agents import analysis_agent, formatting_agent, changelog_agent
+
+logger = logging.getLogger(__name__)
 
 
 def get_openai_client() -> Optional[AsyncOpenAI]:
@@ -63,22 +69,180 @@ async def _get_admin_config(
     return config.config_data if config else None
 
 
+async def _get_previous_version(db: AsyncSession, version: DocumentVersion) -> Optional[DocumentVersion]:
+    """Get the previous version of a document for comparison."""
+    if version.version_number <= 1:
+        return None
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == version.document_id,
+            DocumentVersion.version_number == version.version_number - 1,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+# ──────────────────────────────────────────────────────────────
+# Content consistency validation (for revisions)
+# ──────────────────────────────────────────────────────────────
+
+CONSISTENCY_PROMPT = """Você é um especialista em documentos corporativos.
+Compare o TEMA/ASSUNTO do documento original com o novo documento submetido como revisão.
+
+Ambos devem tratar do MESMO ASSUNTO GERAL. Se o novo documento tratar de um assunto
+completamente diferente, isso indica que o autor pode ter selecionado o código errado.
+
+Responda em JSON:
+{
+    "is_consistent": true/false,
+    "confidence": 0.0 a 1.0,
+    "original_topic": "Resumo do assunto do documento original",
+    "new_topic": "Resumo do assunto do novo documento",
+    "warning_message": "Mensagem de alerta se inconsistente, null se consistente"
+}
+
+Apenas retorne o JSON, sem texto adicional."""
+
+
+async def _validate_content_consistency(
+    old_text: str, new_text: str
+) -> dict:
+    """Validate that a revision's content is consistent with the original document."""
+    result = await _call_with_fallback(
+        lambda client: _ai_consistency_check(client, old_text, new_text),
+        lambda: _mock_consistency_check(old_text, new_text),
+    )
+    return result
+
+
+async def _ai_consistency_check(client: AsyncOpenAI, old_text: str, new_text: str) -> dict:
+    """Use AI to check content consistency between versions."""
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": CONSISTENCY_PROMPT},
+            {"role": "user", "content": (
+                f"DOCUMENTO ORIGINAL:\n\n{old_text[:3000]}\n\n"
+                f"---\n\n"
+                f"NOVA VERSÃO (REVISÃO):\n\n{new_text[:3000]}"
+            )},
+        ],
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+    content = response.choices[0].message.content
+    return json.loads(content)
+
+
+def _mock_consistency_check(old_text: str, new_text: str) -> dict:
+    """Mock consistency check — assumes consistent."""
+    return {
+        "is_consistent": True,
+        "confidence": 0.8,
+        "original_topic": "Documento original",
+        "new_topic": "Nova versão do documento",
+        "warning_message": None,
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# Analysis (with consistency check + auto-changelog for revisions)
+# ──────────────────────────────────────────────────────────────
+
 async def run_analysis(db: AsyncSession, version_id: int) -> AIAnalysis:
-    """Run the analysis agent on a document version."""
+    """Run the analysis agent on a document version.
+
+    For revisions (version_number > 1):
+    - Validates content consistency with the original document
+    - Auto-generates changelog comparing with previous version
+    """
     version = await _get_version(db, version_id)
     version.status = "analyzing"
     await db.flush()
 
     text = version.extracted_text or ""
-    category_id = version.document.category_id if version.document else None
+    doc = version.document
+    category_id = doc.category_id if doc else None
+    document_type = doc.document_type if doc else None
 
     # Get rules from admin config
     rules = await _get_admin_config(db, "analysis_rules", category_id)
 
+    # Run standard analysis
     result = await _call_with_fallback(
-        lambda client: analysis_agent.analyze(client, text, rules=rules, document_type=None),
+        lambda client: analysis_agent.analyze(client, text, rules=rules, document_type=document_type),
         lambda: analysis_agent.get_mock_analysis(text),
     )
+
+    # For revisions: validate content consistency + auto-generate changelog
+    prev_version = await _get_previous_version(db, version)
+    if prev_version and prev_version.extracted_text:
+        old_text = prev_version.extracted_text
+
+        # Content consistency validation
+        consistency = await _validate_content_consistency(old_text, text)
+        result["consistency_check"] = consistency
+
+        if not consistency.get("is_consistent", True):
+            # Add warning to feedback items (non-blocking)
+            warning_msg = consistency.get("warning_message") or (
+                f"O conteúdo submetido parece diferir significativamente do documento "
+                f"{doc.code} original ({doc.title}). Verifique se selecionou o código correto."
+            )
+            result["feedback_items"].append({
+                "item": "Consistência código + conteúdo",
+                "status": "rejected",
+                "suggestion": warning_msg,
+            })
+
+        # Auto-generate changelog
+        changelog_result = await _call_with_fallback(
+            lambda client: changelog_agent.generate_changelog(client, text, old_text),
+            lambda: changelog_agent.get_mock_changelog(text, old_text),
+        )
+
+        # Remove existing changelog for this version (prevents duplicates on re-analysis)
+        existing_cls = await db.execute(
+            select(Changelog).where(Changelog.version_id == version_id)
+        )
+        for old_cl in existing_cls.scalars().all():
+            await db.delete(old_cl)
+
+        # Save changelog record
+        cl = Changelog(
+            version_id=version_id,
+            previous_version_id=prev_version.id,
+            diff_content=changelog_result.get("diff_content"),
+            summary=changelog_result.get("summary"),
+        )
+        db.add(cl)
+
+        # Include changelog in analysis result for frontend display
+        result["auto_changelog"] = {
+            "summary": changelog_result.get("summary"),
+            "sections": changelog_result.get("diff_content", {}).get("sections", []),
+        }
+    elif version.version_number == 1:
+        # First version — generate initial changelog
+        changelog_result = await _call_with_fallback(
+            lambda client: changelog_agent.generate_changelog(client, text, None),
+            lambda: changelog_agent.get_mock_changelog(text, None),
+        )
+
+        # Remove existing changelog for this version (prevents duplicates on re-analysis)
+        existing_cls = await db.execute(
+            select(Changelog).where(Changelog.version_id == version_id)
+        )
+        for old_cl in existing_cls.scalars().all():
+            await db.delete(old_cl)
+
+        cl = Changelog(
+            version_id=version_id,
+            previous_version_id=None,
+            diff_content=changelog_result.get("diff_content"),
+            summary=changelog_result.get("summary"),
+        )
+        db.add(cl)
 
     # Save analysis
     analysis = AIAnalysis(
@@ -99,23 +263,46 @@ async def run_analysis(db: AsyncSession, version_id: int) -> AIAnalysis:
     return analysis
 
 
+# ──────────────────────────────────────────────────────────────
+# Formatting (template-aware)
+# ──────────────────────────────────────────────────────────────
+
+async def _get_active_template(db: AsyncSession, document_type: str) -> Optional[DocumentTemplate]:
+    """Get the active template for a document type."""
+    result = await db.execute(
+        select(DocumentTemplate).where(
+            DocumentTemplate.document_type == document_type,
+            DocumentTemplate.is_active == True,
+        ).limit(1)
+    )
+    return result.scalars().first()
+
+
 async def run_formatting(db: AsyncSession, version_id: int) -> DocumentVersion:
-    """Run the formatting agent on a document version."""
+    """Run the formatting agent on a document version.
+
+    If an active template exists for the document type, uses template_service
+    to inject content into the template. Otherwise falls back to the generic
+    document generator.
+    """
     version = await _get_version(db, version_id)
     version.status = "formatting"
     await db.flush()
 
     text = version.extracted_text or ""
-    category_id = version.document.category_id if version.document else None
+    doc = version.document
+    category_id = doc.category_id if doc else None
+    document_type = doc.document_type if doc else None
 
-    # Get template config
+    # Get template config from admin
     template_config = await _get_admin_config(db, "template", category_id)
 
+    # Run AI restructuring to organize content into sections
     result = await _call_with_fallback(
         lambda client: formatting_agent.restructure(
-            client, text, template_config=template_config, document_type=None
+            client, text, template_config=template_config, document_type=document_type
         ),
-        lambda: formatting_agent.get_mock_restructure(text),
+        lambda: formatting_agent.get_mock_restructure(text, document_type=document_type),
     )
 
     # Save formatting analysis record
@@ -130,16 +317,109 @@ async def run_formatting(db: AsyncSession, version_id: int) -> DocumentVersion:
     db.add(format_analysis)
     await db.flush()
 
-    # Generate the formatted document
-    from app.services.document_generator import format_document
+    # Generate formatted document
+    formatted_dir = os.path.join(settings.STORAGE_PATH, "formatted")
+    os.makedirs(formatted_dir, exist_ok=True)
+    base_name = f"doc_{version.document_id}_v{version.version_number}"
+    docx_path = os.path.join(formatted_dir, f"{base_name}.docx")
+    pdf_path = os.path.join(formatted_dir, f"{base_name}.pdf")
 
-    try:
-        docx_path, pdf_path = await format_document(version, result, template_config, settings.STORAGE_PATH)
-        version.formatted_file_path_docx = docx_path
-        version.formatted_file_path_pdf = pdf_path
-    except Exception:
-        # If formatting fails, keep going without formatted files
-        pass
+    # Check for an active template
+    template = None
+    if document_type:
+        template = await _get_active_template(db, document_type)
+
+    if template and os.path.exists(template.template_file_path):
+        logger.info(f"Usando template '{template.name}' (id={template.id}) para {document_type}")
+        from app.services.template_service import format_document_with_template
+
+        # Build metadata
+        revision_str = f".{doc.revision_number:02d}" if doc else ""
+        metadata = {
+            "title": doc.title if doc else "",
+            "code": doc.code if doc else "",
+            "revision": f"{doc.revision_number:02d}" if doc else "00",
+            "date": datetime.now(timezone.utc).strftime("%d/%m/%Y"),
+            "sector": doc.sector or "",
+        }
+
+        # Get changelog entries for revision history table
+        changelog_entries = []
+        cl_result = await db.execute(
+            select(Changelog).where(Changelog.version_id == version_id)
+        )
+        cl = cl_result.scalars().first()
+        if cl and cl.diff_content:
+            sections = cl.diff_content.get("sections", [])
+            changes_text = "; ".join(
+                s.get("description", "") for s in sections if s.get("description")
+            )
+            changelog_entries.append({
+                "revision": f"{doc.revision_number:02d}" if doc else "00",
+                "date": datetime.now(timezone.utc).strftime("%d/%m/%Y"),
+                "changes": changes_text or cl.summary or "Versão inicial",
+                "responsible": doc.created_by_profile if doc else "",
+            })
+
+        # Get approval data (if any)
+        approval_data = []
+        try:
+            from app.models.approval import ApprovalChain, ApprovalChainApprover
+            chain_result = await db.execute(
+                select(ApprovalChain)
+                .options(selectinload(ApprovalChain.approvers))
+                .where(ApprovalChain.version_id == version_id)
+            )
+            chain = chain_result.scalar_one_or_none()
+            if chain:
+                for approver in chain.approvers:
+                    if approver.action == "approve":
+                        approval_data.append({
+                            "type": chain.chain_type or "A",
+                            "date": approver.acted_at.strftime("%d/%m/%Y") if approver.acted_at else "",
+                            "name": approver.approver_name,
+                            "sector": approver.approver_role,
+                            "signature": "",
+                        })
+        except Exception:
+            pass
+
+        try:
+            docx_out, pdf_out = await format_document_with_template(
+                template_path=template.template_file_path,
+                structured_content=result,
+                metadata=metadata,
+                source_docx_path=version.original_file_path,
+                changelog_entries=changelog_entries,
+                approval_data=approval_data,
+                output_docx_path=docx_path,
+                output_pdf_path=pdf_path,
+            )
+            version.formatted_file_path_docx = docx_out
+            version.formatted_file_path_pdf = pdf_out
+        except Exception as e:
+            # Template formatting failed — fall back to generic
+            logger.error(f"Formatação com template falhou: {e}. Usando gerador genérico.")
+            try:
+                from app.services.document_generator import format_document
+                d_path, p_path = await format_document(version, result, template_config, settings.STORAGE_PATH)
+                version.formatted_file_path_docx = d_path
+                version.formatted_file_path_pdf = p_path
+            except Exception:
+                pass
+    else:
+        # No template — use generic document generator (fallback)
+        logger.warning(
+            f"Nenhum template ativo para '{document_type}' — usando gerador genérico. "
+            f"Faça upload de um template pelo Admin ou verifique se os templates padrão foram carregados."
+        )
+        from app.services.document_generator import format_document
+        try:
+            d_path, p_path = await format_document(version, result, template_config, settings.STORAGE_PATH)
+            version.formatted_file_path_docx = d_path
+            version.formatted_file_path_pdf = p_path
+        except Exception:
+            pass
 
     version.status = "in_review"
     await db.flush()
@@ -147,26 +427,35 @@ async def run_formatting(db: AsyncSession, version_id: int) -> DocumentVersion:
     return version
 
 
+# ──────────────────────────────────────────────────────────────
+# Changelog (standalone — kept for backward compatibility)
+# ──────────────────────────────────────────────────────────────
+
 async def run_changelog(db: AsyncSession, version_id: int) -> Changelog:
-    """Run the changelog agent on a document version."""
+    """Run the changelog agent on a document version.
+
+    Note: Changelog is now auto-generated during run_analysis().
+    This function exists for standalone/manual changelog generation.
+    """
     version = await _get_version(db, version_id)
+
+    # Check if changelog already exists (from auto-generation in analysis)
+    existing = await db.execute(
+        select(Changelog).where(Changelog.version_id == version_id)
+    )
+    existing_cl = existing.scalars().first()
+    if existing_cl:
+        return existing_cl
 
     text = version.extracted_text or ""
 
     # Find previous version
     old_text = None
     previous_version_id = None
-    if version.version_number > 1:
-        result = await db.execute(
-            select(DocumentVersion).where(
-                DocumentVersion.document_id == version.document_id,
-                DocumentVersion.version_number == version.version_number - 1,
-            )
-        )
-        prev_version = result.scalar_one_or_none()
-        if prev_version:
-            old_text = prev_version.extracted_text
-            previous_version_id = prev_version.id
+    prev_version = await _get_previous_version(db, version)
+    if prev_version:
+        old_text = prev_version.extracted_text
+        previous_version_id = prev_version.id
 
     result = await _call_with_fallback(
         lambda client: changelog_agent.generate_changelog(client, text, old_text),

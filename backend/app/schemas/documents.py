@@ -6,11 +6,12 @@ from app.schemas.versions import VersionResponse
 
 
 class DocumentCreate(BaseModel):
-    code: str
+    document_type: str  # PQ, IT, RQ
     title: str
     category_id: Optional[int] = None
     tags: Optional[list[str]] = None
     created_by_profile: str
+    sector: Optional[str] = None
 
 
 class DocumentUpdate(BaseModel):
@@ -31,6 +32,11 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     tags: list[str] = []
+    document_type: Optional[str] = None
+    sequential_number: Optional[int] = None
+    revision_number: int = 0
+    sector: Optional[str] = None
+    effective_date: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

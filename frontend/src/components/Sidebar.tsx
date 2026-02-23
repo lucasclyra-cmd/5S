@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   Home,
   LogOut,
+  BookOpen,
+  Users,
 } from "lucide-react";
 
 interface NavSection {
@@ -46,6 +48,16 @@ const navByProfile: Record<string, NavSection[]> = {
         },
       ],
     },
+    {
+      title: "Registros",
+      items: [
+        {
+          label: "Lista Mestra",
+          href: "/processos/lista-mestra",
+          icon: <BookOpen size={18} />,
+        },
+      ],
+    },
   ],
   admin: [
     {
@@ -71,6 +83,11 @@ const navByProfile: Record<string, NavSection[]> = {
           label: "Categorias e Tags",
           href: "/admin/categorias",
           icon: <FolderTree size={18} />,
+        },
+        {
+          label: "Aprovadores Padrão",
+          href: "/admin/aprovadores",
+          icon: <Users size={18} />,
         },
       ],
     },

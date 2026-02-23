@@ -7,11 +7,15 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.database import Base
+from app.config import settings
 
 # Import all models so they register with Base.metadata
 import app.models  # noqa: F401
 
 config = context.config
+
+# Override alembic.ini URL with the one from .env / app config
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -27,6 +31,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,  # Required for SQLite ALTER TABLE support
     )
 
     with context.begin_transaction():
@@ -34,7 +39,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        render_as_batch=True,  # Required for SQLite ALTER TABLE support
+    )
 
     with context.begin_transaction():
         context.run_migrations()
@@ -43,8 +52,9 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode using async engine."""
     configuration = config.get_section(config.config_ini_section, {})
-    # Override with async driver for running migrations
     url = configuration.get("sqlalchemy.url", "")
+
+    # Ensure async driver is used
     if "postgresql://" in url and "asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://")
         configuration["sqlalchemy.url"] = url
