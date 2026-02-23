@@ -11,7 +11,6 @@ import {
   LayoutTemplate,
   Save,
   X,
-  AlertCircle,
 } from "lucide-react";
 import {
   getAdminConfigs,
@@ -197,18 +196,19 @@ export default function TemplatesPage() {
       <div className="mb-8">
         <Link
           href="/admin"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 transition-colors mb-4"
+          style={{ fontSize: 13, color: "var(--text-muted)" }}
         >
           <ArrowLeft size={16} />
           Voltar ao painel
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Templates de Formatacao
+            <h1 style={{ color: "var(--text-primary)" }}>
+              Templates de Formatação
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Configure modelos de formatacao para diferentes tipos de documento.
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
+              Configure modelos de formatação para diferentes tipos de documento.
             </p>
           </div>
           <button onClick={openCreateForm} className="btn-primary">
@@ -220,8 +220,16 @@ export default function TemplatesPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--danger)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
@@ -229,12 +237,12 @@ export default function TemplatesPage() {
       {showForm && (
         <div className="card mb-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 style={{ color: "var(--text-primary)" }}>
               {editingId ? "Editar Template" : "Novo Template"}
             </h2>
             <button
               onClick={closeForm}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="btn-action"
             >
               <X size={20} />
             </button>
@@ -250,7 +258,7 @@ export default function TemplatesPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, document_type: e.target.value })
                   }
-                  placeholder="Ex: procedimento, instrucao"
+                  placeholder="Ex: procedimento, instrução"
                   className="input-field"
                 />
               </div>
@@ -317,7 +325,7 @@ export default function TemplatesPage() {
               <label className="label-field">Margens (cm)</label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500">Superior</label>
+                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Superior</label>
                   <input
                     type="number"
                     step="0.1"
@@ -332,7 +340,7 @@ export default function TemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Inferior</label>
+                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Inferior</label>
                   <input
                     type="number"
                     step="0.1"
@@ -347,7 +355,7 @@ export default function TemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Esquerda</label>
+                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Esquerda</label>
                   <input
                     type="number"
                     step="0.1"
@@ -362,7 +370,7 @@ export default function TemplatesPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Direita</label>
+                  <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Direita</label>
                   <input
                     type="number"
                     step="0.1"
@@ -381,7 +389,7 @@ export default function TemplatesPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label-field">Texto do Cabecalho</label>
+                <label className="label-field">Texto do Cabeçalho</label>
                 <input
                   type="text"
                   value={formData.header_text}
@@ -393,32 +401,33 @@ export default function TemplatesPage() {
                 />
               </div>
               <div>
-                <label className="label-field">Texto do Rodape</label>
+                <label className="label-field">Texto do Rodapé</label>
                 <input
                   type="text"
                   value={formData.footer_text}
                   onChange={(e) =>
                     setFormData({ ...formData, footer_text: e.target.value })
                   }
-                  placeholder="Ex: Pagina {page}"
+                  placeholder="Ex: Página {page}"
                   className="input-field"
                 />
               </div>
             </div>
 
             <div>
-              <label className="label-field">Secoes Obrigatorias</label>
+              <label className="label-field">Seções Obrigatórias</label>
               <div className="flex flex-wrap gap-2 mb-2">
                 {formData.required_sections.map((s) => (
                   <span
                     key={s}
-                    className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1 text-sm text-indigo-700"
+                    className="chip"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
                   >
                     {s}
                     <button
                       type="button"
                       onClick={() => removeSection(s)}
-                      className="rounded-full p-0.5 hover:bg-indigo-200 transition-colors"
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: "var(--accent-hover)" }}
                     >
                       <X size={12} />
                     </button>
@@ -436,7 +445,7 @@ export default function TemplatesPage() {
                       addSection();
                     }
                   }}
-                  placeholder="Nome da secao"
+                  placeholder="Nome da seção"
                   className="input-field flex-1"
                 />
                 <button
@@ -450,7 +459,7 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-3 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
               <button
                 type="submit"
                 disabled={saving}
@@ -478,19 +487,19 @@ export default function TemplatesPage() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
+          <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
         </div>
       )}
 
       {/* Templates list */}
       {!loading && configs.length === 0 && !showForm && (
         <div className="card text-center py-16">
-          <LayoutTemplate size={48} className="mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">
+          <LayoutTemplate size={48} className="mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
+          <h3 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-primary)" }}>
             Nenhum template configurado
           </h3>
-          <p className="text-sm text-gray-500 mt-1 mb-6">
-            Crie seu primeiro template de formatacao.
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, marginBottom: 24 }}>
+            Crie seu primeiro template de formatação.
           </p>
           <button onClick={openCreateForm} className="btn-primary">
             <Plus size={18} />
@@ -510,40 +519,43 @@ export default function TemplatesPage() {
                     <div className="flex items-center gap-3 mb-2">
                       <LayoutTemplate
                         size={20}
-                        className="text-indigo-600"
+                        style={{ color: "var(--accent)" }}
                       />
-                      <h3 className="text-base font-semibold text-gray-900">
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
                         {config.document_type || "Template Geral"}
                       </h3>
                       <span className="badge-info">
                         {getCategoryName(config.category_id)}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm text-gray-600 mt-3">
+                    <div
+                      className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3"
+                      style={{ fontSize: 13, color: "var(--text-secondary)" }}
+                    >
                       <div>
-                        <span className="text-gray-400">Fonte:</span>{" "}
+                        <span style={{ color: "var(--text-muted)" }}>Fonte:</span>{" "}
                         {cd.font_family || "N/A"} {cd.font_size || ""}pt
                       </div>
                       <div>
-                        <span className="text-gray-400">Margens:</span>{" "}
+                        <span style={{ color: "var(--text-muted)" }}>Margens:</span>{" "}
                         {cd.margins
                           ? `${cd.margins.top}/${cd.margins.bottom}/${cd.margins.left}/${cd.margins.right}cm`
                           : "N/A"}
                       </div>
                       <div>
-                        <span className="text-gray-400">Cabecalho:</span>{" "}
+                        <span style={{ color: "var(--text-muted)" }}>Cabeçalho:</span>{" "}
                         {cd.header_text || "N/A"}
                       </div>
                       <div>
-                        <span className="text-gray-400">Rodape:</span>{" "}
+                        <span style={{ color: "var(--text-muted)" }}>Rodapé:</span>{" "}
                         {cd.footer_text || "N/A"}
                       </div>
                     </div>
                     {cd.required_sections &&
                       cd.required_sections.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          <span className="text-xs text-gray-400">
-                            Secoes:
+                        <div className="mt-3 flex flex-wrap gap-1.5 items-center">
+                          <span className="section-title" style={{ marginBottom: 0 }}>
+                            Seções:
                           </span>
                           {cd.required_sections.map((s: string) => (
                             <span key={s} className="badge-neutral">
@@ -556,7 +568,7 @@ export default function TemplatesPage() {
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => openEditForm(config)}
-                      className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 transition-colors"
+                      className="btn-action"
                       title="Editar"
                     >
                       <Pencil size={18} />
@@ -565,13 +577,14 @@ export default function TemplatesPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleDelete(config.id)}
-                          className="rounded-lg bg-red-100 p-2 text-red-600 hover:bg-red-200 transition-colors text-xs font-medium"
+                          className="btn-danger"
+                          style={{ padding: "6px 12px", fontSize: 12 }}
                         >
                           Confirmar
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(null)}
-                          className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 transition-colors text-xs"
+                          className="btn-ghost"
                         >
                           Cancelar
                         </button>
@@ -579,8 +592,9 @@ export default function TemplatesPage() {
                     ) : (
                       <button
                         onClick={() => setDeleteConfirmId(config.id)}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="btn-action"
                         title="Excluir"
+                        style={{ color: "var(--text-muted)" }}
                       >
                         <Trash2 size={18} />
                       </button>

@@ -2,9 +2,6 @@
 
 import React from "react";
 import {
-  Clock,
-  CheckCircle2,
-  XCircle,
   AlertCircle,
   ChevronRight,
 } from "lucide-react";
@@ -29,16 +26,6 @@ export default function WorkflowQueue({
     });
   }
 
-  function getStatusIcon(action: string | null) {
-    if (action === "approved") {
-      return <CheckCircle2 size={16} className="text-green-500" />;
-    }
-    if (action === "rejected") {
-      return <XCircle size={16} className="text-red-500" />;
-    }
-    return <Clock size={16} className="text-amber-500" />;
-  }
-
   function getStatusLabel(action: string | null) {
     if (action === "approved") return "Aprovado";
     if (action === "rejected") return "Rejeitado";
@@ -54,71 +41,68 @@ export default function WorkflowQueue({
   if (items.length === 0) {
     return (
       <div className="card text-center py-12">
-        <AlertCircle size={40} className="mx-auto mb-3 text-gray-300" />
-        <h3 className="text-lg font-medium text-gray-900">
+        <AlertCircle size={40} className="mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+        <h3 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-primary)" }}>
           Fila vazia
         </h3>
-        <p className="text-sm text-gray-500 mt-1">
-          Nao ha documentos pendentes de revisao.
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+          Não há documentos pendentes de revisão.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+    <div className="table-container">
+      <table>
+        <thead>
           <tr>
-            <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Codigo
-            </th>
-            <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Titulo
-            </th>
-            <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Status
-            </th>
-            <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Data
-            </th>
-            <th className="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Acao
-            </th>
+            <th>Código</th>
+            <th>Título</th>
+            <th>Status</th>
+            <th>Data</th>
+            <th style={{ textAlign: "right" }}>Ação</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody>
           {items.map((item) => (
             <tr
               key={item.id}
-              className="hover:bg-gray-50 transition-colors cursor-pointer"
+              className="cursor-pointer"
               onClick={() => onItemClick(item)}
             >
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span className="text-sm font-medium text-indigo-600">
+              <td>
+                <span style={{ fontWeight: 500, color: "var(--accent)" }}>
                   {item.document_code}
                 </span>
               </td>
-              <td className="px-6 py-4">
-                <span className="text-sm text-gray-900">
+              <td>
+                <span style={{ color: "var(--text-primary)" }}>
                   {item.document_title}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span
-                  className={`${getStatusBadgeClass(item.action)} flex items-center gap-1.5 w-fit`}
-                >
-                  {getStatusIcon(item.action)}
+              <td>
+                <span className={getStatusBadgeClass(item.action)}>
                   {getStatusLabel(item.action)}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span className="text-sm text-gray-500">
+              <td>
+                <span style={{ color: "var(--text-muted)" }}>
                   {formatDate(item.created_at)}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-right">
-                <button className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+              <td style={{ textAlign: "right" }}>
+                <button
+                  className="inline-flex items-center gap-1"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: "var(--accent)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
                   Revisar
                   <ChevronRight size={16} />
                 </button>

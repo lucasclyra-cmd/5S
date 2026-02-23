@@ -31,7 +31,7 @@ export default function DocumentUpload({
   function validateFile(file: File): boolean {
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
     if (!allowedExtensions.includes(ext) && !allowedTypes.includes(file.type)) {
-      setError("Tipo de arquivo invalido. Apenas .docx e .pdf sao aceitos.");
+      setError("Tipo de arquivo inválido. Apenas .docx e .pdf são aceitos.");
       return false;
     }
     setError(null);
@@ -80,19 +80,26 @@ export default function DocumentUpload({
 
   if (selectedFile) {
     return (
-      <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 p-6">
+      <div
+        style={{
+          borderRadius: "var(--radius-lg)",
+          border: "2px solid var(--accent-border)",
+          background: "var(--accent-light)",
+          padding: 24,
+        }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {uploading ? (
-              <Loader2 size={24} className="text-indigo-600 animate-spin" />
+              <Loader2 size={24} className="animate-spin" style={{ color: "var(--accent)" }} />
             ) : (
-              <FileText size={24} className="text-indigo-600" />
+              <FileText size={24} style={{ color: "var(--accent)" }} />
             )}
             <div>
-              <p className="text-sm font-medium text-gray-900">
+              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>
                 {selectedFile.name}
               </p>
-              <p className="text-xs text-gray-500">
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
                 {formatSize(selectedFile.size)}
               </p>
             </div>
@@ -101,7 +108,7 @@ export default function DocumentUpload({
             <button
               type="button"
               onClick={handleClear}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors"
+              className="btn-action"
             >
               <X size={18} />
             </button>
@@ -109,10 +116,26 @@ export default function DocumentUpload({
         </div>
         {uploading && (
           <div className="mt-3">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-200">
-              <div className="h-full animate-pulse rounded-full bg-indigo-600 w-2/3" />
+            <div
+              style={{
+                height: 8,
+                width: "100%",
+                overflow: "hidden",
+                borderRadius: 100,
+                background: "var(--accent-border)",
+              }}
+            >
+              <div
+                className="animate-pulse"
+                style={{
+                  height: "100%",
+                  borderRadius: 100,
+                  background: "var(--accent)",
+                  width: "66%",
+                }}
+              />
             </div>
-            <p className="mt-2 text-xs text-indigo-600 font-medium">
+            <p style={{ marginTop: 8, fontSize: 12, color: "var(--accent)", fontWeight: 500 }}>
               Enviando documento...
             </p>
           </div>
@@ -128,25 +151,26 @@ export default function DocumentUpload({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => inputRef.current?.click()}
-        className={`relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 transition-colors ${
-          isDragOver
-            ? "border-indigo-400 bg-indigo-50"
-            : "border-gray-300 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50/50"
-        }`}
+        className="relative flex cursor-pointer flex-col items-center justify-center transition-colors"
+        style={{
+          borderRadius: "var(--radius-lg)",
+          border: `2px dashed ${isDragOver ? "var(--accent)" : "var(--border)"}`,
+          background: isDragOver ? "var(--accent-light)" : "var(--bg-main)",
+          padding: 40,
+        }}
       >
         <Upload
           size={36}
-          className={`mb-3 ${
-            isDragOver ? "text-indigo-500" : "text-gray-400"
-          }`}
+          className="mb-3"
+          style={{ color: isDragOver ? "var(--accent)" : "var(--text-muted)" }}
         />
-        <p className="text-sm font-medium text-gray-700">
+        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>
           Arraste e solte seu arquivo aqui
         </p>
-        <p className="mt-1 text-xs text-gray-500">
+        <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>
           ou clique para selecionar
         </p>
-        <p className="mt-3 text-xs text-gray-400">
+        <p style={{ marginTop: 12, fontSize: 12, color: "var(--text-muted)" }}>
           Formatos aceitos: .docx, .pdf
         </p>
         <input
@@ -158,7 +182,7 @@ export default function DocumentUpload({
         />
       </div>
       {error && (
-        <p className="mt-2 text-sm text-red-600">{error}</p>
+        <p style={{ marginTop: 8, fontSize: 13, color: "var(--danger)" }}>{error}</p>
       )}
     </div>
   );

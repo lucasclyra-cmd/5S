@@ -117,7 +117,7 @@ export default function RegrasPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!formData.name.trim()) {
-      setError("O nome da regra e obrigatorio.");
+      setError("O nome da regra é obrigatório.");
       return;
     }
     setSaving(true);
@@ -172,18 +172,19 @@ export default function RegrasPage() {
       <div className="mb-8">
         <Link
           href="/admin"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 transition-colors mb-4"
+          style={{ fontSize: 13, color: "var(--text-muted)" }}
         >
           <ArrowLeft size={16} />
           Voltar ao painel
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Regras de Analise
+            <h1 style={{ color: "var(--text-primary)" }}>
+              Regras de Análise
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Defina checklists e criterios de verificacao para a IA.
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
+              Defina checklists e critérios de verificação para a IA.
             </p>
           </div>
           <button onClick={openCreateForm} className="btn-primary">
@@ -195,8 +196,16 @@ export default function RegrasPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--danger)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
@@ -204,12 +213,12 @@ export default function RegrasPage() {
       {showForm && (
         <div className="card mb-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 style={{ color: "var(--text-primary)" }}>
               {editingId ? "Editar Regra" : "Nova Regra"}
             </h2>
             <button
               onClick={closeForm}
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="btn-action"
             >
               <X size={20} />
             </button>
@@ -224,19 +233,19 @@ export default function RegrasPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-                placeholder="Ex: Regra de Formatacao Basica"
+                placeholder="Ex: Regra de Formatação Básica"
                 className="input-field"
               />
             </div>
 
             <div>
-              <label className="label-field">Descricao</label>
+              <label className="label-field">Descrição</label>
               <textarea
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="Descreva o proposito desta regra..."
+                placeholder="Descreva o propósito desta regra..."
                 rows={3}
                 className="input-field resize-none"
               />
@@ -254,7 +263,7 @@ export default function RegrasPage() {
                       document_type: e.target.value,
                     })
                   }
-                  placeholder="Ex: procedimento, instrucao"
+                  placeholder="Ex: procedimento, instrução"
                   className="input-field"
                 />
               </div>
@@ -284,24 +293,42 @@ export default function RegrasPage() {
 
             <div>
               <label className="label-field">
-                Itens do Checklist (criterios de verificacao)
+                Itens do Checklist (critérios de verificação)
               </label>
               <div className="space-y-2 mb-3">
                 {formData.checklist.map((item, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                    className="flex items-center gap-2 px-3 py-2"
+                    style={{
+                      borderRadius: "var(--radius-sm)",
+                      border: "1px solid var(--border)",
+                      background: "var(--bg-main)",
+                    }}
                   >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-medium text-indigo-700">
+                    <span
+                      className="flex items-center justify-center shrink-0"
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: "50%",
+                        background: "var(--accent-light)",
+                        border: "1px solid var(--accent-border)",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: "var(--accent)",
+                      }}
+                    >
                       {index + 1}
                     </span>
-                    <span className="flex-1 text-sm text-gray-700">
+                    <span className="flex-1" style={{ fontSize: 13, color: "var(--text-primary)" }}>
                       {item}
                     </span>
                     <button
                       type="button"
                       onClick={() => removeChecklistItem(item)}
-                      className="rounded-lg p-1 text-gray-400 hover:bg-gray-200 hover:text-red-500 transition-colors"
+                      className="btn-action"
+                      style={{ width: 24, height: 24 }}
                     >
                       <X size={14} />
                     </button>
@@ -319,7 +346,7 @@ export default function RegrasPage() {
                       addChecklistItem();
                     }
                   }}
-                  placeholder="Descreva um item de verificacao..."
+                  placeholder="Descreva um item de verificação..."
                   className="input-field flex-1"
                 />
                 <button
@@ -333,7 +360,7 @@ export default function RegrasPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-3 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
               <button
                 type="submit"
                 disabled={saving}
@@ -361,19 +388,19 @@ export default function RegrasPage() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
+          <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
         </div>
       )}
 
       {/* Rules list */}
       {!loading && configs.length === 0 && !showForm && (
         <div className="card text-center py-16">
-          <ShieldCheck size={48} className="mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">
+          <ShieldCheck size={48} className="mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
+          <h3 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-primary)" }}>
             Nenhuma regra configurada
           </h3>
-          <p className="text-sm text-gray-500 mt-1 mb-6">
-            Crie sua primeira regra de analise.
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, marginBottom: 24 }}>
+            Crie sua primeira regra de análise.
           </p>
           <button onClick={openCreateForm} className="btn-primary">
             <Plus size={18} />
@@ -391,8 +418,8 @@ export default function RegrasPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <ShieldCheck size={20} className="text-indigo-600" />
-                      <h3 className="text-base font-semibold text-gray-900">
+                      <ShieldCheck size={20} style={{ color: "var(--accent)" }} />
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
                         {cd.name || "Regra sem nome"}
                       </h3>
                       {config.document_type && (
@@ -405,21 +432,34 @@ export default function RegrasPage() {
                       </span>
                     </div>
                     {cd.description && (
-                      <p className="text-sm text-gray-500 mb-3">
+                      <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
                         {cd.description}
                       </p>
                     )}
                     {cd.checklist && cd.checklist.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        <p className="section-title" style={{ marginBottom: 4 }}>
                           Checklist ({cd.checklist.length} itens)
                         </p>
                         {cd.checklist.map((item: string, i: number) => (
                           <div
                             key={i}
-                            className="flex items-start gap-2 text-sm text-gray-600"
+                            className="flex items-start gap-2"
+                            style={{ fontSize: 13, color: "var(--text-secondary)" }}
                           >
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-500 mt-0.5">
+                            <span
+                              className="flex shrink-0 items-center justify-center mt-0.5"
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: "50%",
+                                background: "var(--bg-main)",
+                                border: "1px solid var(--border)",
+                                fontSize: 10,
+                                fontWeight: 500,
+                                color: "var(--text-muted)",
+                              }}
+                            >
                               {i + 1}
                             </span>
                             <span>{item}</span>
@@ -431,7 +471,7 @@ export default function RegrasPage() {
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => openEditForm(config)}
-                      className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 transition-colors"
+                      className="btn-action"
                       title="Editar"
                     >
                       <Pencil size={18} />
@@ -440,13 +480,14 @@ export default function RegrasPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleDelete(config.id)}
-                          className="rounded-lg bg-red-100 p-2 text-red-600 hover:bg-red-200 transition-colors text-xs font-medium"
+                          className="btn-danger"
+                          style={{ padding: "6px 12px", fontSize: 12 }}
                         >
                           Confirmar
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(null)}
-                          className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 transition-colors text-xs"
+                          className="btn-ghost"
                         >
                           Cancelar
                         </button>
@@ -454,8 +495,9 @@ export default function RegrasPage() {
                     ) : (
                       <button
                         onClick={() => setDeleteConfirmId(config.id)}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="btn-action"
                         title="Excluir"
+                        style={{ color: "var(--text-muted)" }}
                       >
                         <Trash2 size={18} />
                       </button>

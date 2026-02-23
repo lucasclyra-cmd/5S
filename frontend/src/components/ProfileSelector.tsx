@@ -11,38 +11,30 @@ const profiles: {
   description: string;
   icon: React.ReactNode;
   href: string;
-  color: string;
-  bgColor: string;
 }[] = [
   {
     id: "autor",
     label: "Autor",
     description:
-      "Submeta documentos, acompanhe o status de analise pela IA e gerencie suas versoes.",
-    icon: <FileText size={40} />,
+      "Submeta documentos, acompanhe o status de análise pela IA e gerencie suas versões.",
+    icon: <FileText size={32} />,
     href: "/autor",
-    color: "text-blue-600",
-    bgColor: "bg-blue-50 hover:bg-blue-100 border-blue-200 hover:border-blue-400",
   },
   {
     id: "processos",
     label: "Processos",
     description:
-      "Revise documentos na fila de aprovacao, aprove ou rejeite com comentarios.",
-    icon: <ClipboardList size={40} />,
+      "Revise documentos na fila de aprovação, aprove ou rejeite com comentários.",
+    icon: <ClipboardList size={32} />,
     href: "/processos",
-    color: "text-indigo-600",
-    bgColor: "bg-indigo-50 hover:bg-indigo-100 border-indigo-200 hover:border-indigo-400",
   },
   {
     id: "admin",
     label: "Administrador",
     description:
-      "Configure templates, regras de analise, categorias e tags do sistema.",
-    icon: <Settings size={40} />,
+      "Configure templates, regras de análise, categorias e tags do sistema.",
+    icon: <Settings size={32} />,
     href: "/admin",
-    color: "text-violet-600",
-    bgColor: "bg-violet-50 hover:bg-violet-100 border-violet-200 hover:border-violet-400",
   },
 ];
 
@@ -56,20 +48,46 @@ export default function ProfileSelector() {
   };
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
+    <div className="grid gap-4 sm:grid-cols-3 max-w-3xl mx-auto w-full px-4">
       {profiles.map((p) => (
         <button
           key={p.id}
           onClick={() => handleSelect(p)}
-          className={`group flex flex-col items-center gap-4 rounded-2xl border-2 p-8 text-center transition-all duration-200 shadow-sm hover:shadow-md ${p.bgColor}`}
+          className="group flex flex-col items-center gap-4 p-7 text-center transition-all duration-200"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: "var(--radius-md)",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+            e.currentTarget.style.borderColor = "var(--accent-border)";
+            e.currentTarget.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+            e.currentTarget.style.transform = "translateY(0)";
+          }}
         >
           <div
-            className={`flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-sm ${p.color}`}
+            className="flex h-14 w-14 items-center justify-center rounded-xl"
+            style={{
+              background: "var(--accent-light)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent-border)",
+            }}
           >
             {p.icon}
           </div>
-          <h3 className="text-xl font-bold text-gray-900">{p.label}</h3>
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <h3
+            className="text-white"
+            style={{ fontSize: "16px", fontWeight: 600 }}
+          >
+            {p.label}
+          </h3>
+          <p style={{ fontSize: "12.5px", color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
             {p.description}
           </p>
         </button>

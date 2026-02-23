@@ -105,7 +105,7 @@ export default function CategoriasPage() {
   async function handleCatSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!catName.trim()) {
-      setCatError("O nome da categoria e obrigatorio.");
+      setCatError("O nome da categoria é obrigatório.");
       return;
     }
     setCatSaving(true);
@@ -179,16 +179,17 @@ export default function CategoriasPage() {
       <div className="mb-8">
         <Link
           href="/admin"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 transition-colors mb-4"
+          style={{ fontSize: 13, color: "var(--text-muted)" }}
         >
           <ArrowLeft size={16} />
           Voltar ao painel
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 style={{ color: "var(--text-primary)" }}>
           Categorias e Tags
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Organize os documentos com categorias hierarquicas e tags.
+        <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
+          Organize os documentos com categorias hierárquicas e tags.
         </p>
       </div>
 
@@ -197,14 +198,15 @@ export default function CategoriasPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <FolderTree size={20} className="text-indigo-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
+              <FolderTree size={20} style={{ color: "var(--accent)" }} />
+              <h2 style={{ color: "var(--text-primary)" }}>
                 Categorias
               </h2>
             </div>
             <button
               onClick={openCatCreate}
-              className="btn-primary text-sm py-1.5 px-3"
+              className="btn-primary"
+              style={{ padding: "6px 12px", fontSize: 13 }}
             >
               <Plus size={16} />
               Nova
@@ -212,8 +214,16 @@ export default function CategoriasPage() {
           </div>
 
           {catError && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-sm text-red-700">{catError}</p>
+            <div
+              className="mb-4"
+              style={{
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--danger)",
+                background: "rgba(201, 69, 62, 0.06)",
+                padding: 12,
+              }}
+            >
+              <p style={{ fontSize: 13, color: "var(--danger)" }}>{catError}</p>
             </div>
           )}
 
@@ -232,12 +242,12 @@ export default function CategoriasPage() {
                   />
                 </div>
                 <div>
-                  <label className="label-field">Descricao</label>
+                  <label className="label-field">Descrição</label>
                   <input
                     type="text"
                     value={catDescription}
                     onChange={(e) => setCatDescription(e.target.value)}
-                    placeholder="Descricao da categoria"
+                    placeholder="Descrição da categoria"
                     className="input-field"
                   />
                 </div>
@@ -266,7 +276,8 @@ export default function CategoriasPage() {
                   <button
                     type="submit"
                     disabled={catSaving}
-                    className="btn-primary text-sm"
+                    className="btn-primary"
+                    style={{ fontSize: 13 }}
                   >
                     {catSaving ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -278,7 +289,8 @@ export default function CategoriasPage() {
                   <button
                     type="button"
                     onClick={closeCatForm}
-                    className="btn-secondary text-sm"
+                    className="btn-secondary"
+                    style={{ fontSize: 13 }}
                   >
                     Cancelar
                   </button>
@@ -292,16 +304,18 @@ export default function CategoriasPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2
                 size={24}
-                className="animate-spin text-indigo-600"
+                className="animate-spin"
+                style={{ color: "var(--accent)" }}
               />
             </div>
           ) : categories.length === 0 ? (
             <div className="card text-center py-8">
               <FolderTree
                 size={36}
-                className="mx-auto mb-3 text-gray-300"
+                className="mx-auto mb-3"
+                style={{ color: "var(--text-muted)" }}
               />
-              <p className="text-sm text-gray-500">
+              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
                 Nenhuma categoria cadastrada.
               </p>
             </div>
@@ -310,19 +324,24 @@ export default function CategoriasPage() {
               {categories.map((cat) => (
                 <div
                   key={cat.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3"
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border)",
+                    background: "var(--bg-card)",
+                  }}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">
+                    <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>
                       {cat.name}
                     </p>
                     {cat.description && (
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="truncate" style={{ fontSize: 12, color: "var(--text-muted)" }}>
                         {cat.description}
                       </p>
                     )}
                     {cat.parent_id && (
-                      <p className="text-xs text-indigo-500 mt-0.5">
+                      <p style={{ fontSize: 12, color: "var(--accent)", marginTop: 2 }}>
                         Pai:{" "}
                         {categories.find((c) => c.id === cat.parent_id)
                           ?.name || `ID ${cat.parent_id}`}
@@ -332,7 +351,7 @@ export default function CategoriasPage() {
                   <div className="flex items-center gap-1 ml-3">
                     <button
                       onClick={() => openCatEdit(cat)}
-                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 transition-colors"
+                      className="btn-action"
                     >
                       <Pencil size={16} />
                     </button>
@@ -340,21 +359,24 @@ export default function CategoriasPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleCatDelete(cat.id)}
-                          className="rounded-lg bg-red-100 px-2 py-1 text-xs text-red-600 hover:bg-red-200 transition-colors font-medium"
+                          className="btn-danger"
+                          style={{ padding: "4px 8px", fontSize: 12 }}
                         >
                           Sim
                         </button>
                         <button
                           onClick={() => setDeleteCatConfirmId(null)}
-                          className="rounded-lg px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 transition-colors"
+                          className="btn-ghost"
+                          style={{ padding: "4px 8px", fontSize: 12 }}
                         >
-                          Nao
+                          Não
                         </button>
                       </div>
                     ) : (
                       <button
                         onClick={() => setDeleteCatConfirmId(cat.id)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="btn-action"
+                        style={{ color: "var(--text-muted)" }}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -369,13 +391,21 @@ export default function CategoriasPage() {
         {/* ─── Tags Section ─── */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <Tag size={20} className="text-indigo-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Tags</h2>
+            <Tag size={20} style={{ color: "var(--accent)" }} />
+            <h2 style={{ color: "var(--text-primary)" }}>Tags</h2>
           </div>
 
           {tagError && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-sm text-red-700">{tagError}</p>
+            <div
+              className="mb-4"
+              style={{
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--danger)",
+                background: "rgba(201, 69, 62, 0.06)",
+                padding: 12,
+              }}
+            >
+              <p style={{ fontSize: 13, color: "var(--danger)" }}>{tagError}</p>
             </div>
           )}
 
@@ -395,7 +425,8 @@ export default function CategoriasPage() {
             <button
               type="submit"
               disabled={tagSaving || !newTagName.trim()}
-              className="btn-primary text-sm py-1.5 px-3"
+              className="btn-primary"
+              style={{ padding: "6px 12px", fontSize: 13 }}
             >
               {tagSaving ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -411,13 +442,14 @@ export default function CategoriasPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2
                 size={24}
-                className="animate-spin text-indigo-600"
+                className="animate-spin"
+                style={{ color: "var(--accent)" }}
               />
             </div>
           ) : tags.length === 0 ? (
             <div className="card text-center py-8">
-              <Tag size={36} className="mx-auto mb-3 text-gray-300" />
-              <p className="text-sm text-gray-500">
+              <Tag size={36} className="mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
                 Nenhuma tag cadastrada.
               </p>
             </div>
@@ -426,29 +458,53 @@ export default function CategoriasPage() {
               {tags.map((tag) => (
                 <div
                   key={tag.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 shadow-sm"
+                  className="chip"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
-                  <span className="text-sm text-gray-700">{tag.name}</span>
+                  <span style={{ fontSize: 13 }}>{tag.name}</span>
                   {deleteTagConfirmId === tag.id ? (
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleTagDelete(tag.id)}
-                        className="text-xs text-red-600 font-medium hover:underline"
+                        style={{
+                          fontSize: 11,
+                          color: "var(--danger)",
+                          fontWeight: 600,
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                        }}
                       >
                         Sim
                       </button>
-                      <span className="text-gray-300">|</span>
+                      <span style={{ color: "var(--text-muted)" }}>|</span>
                       <button
                         onClick={() => setDeleteTagConfirmId(null)}
-                        className="text-xs text-gray-400 hover:underline"
+                        style={{
+                          fontSize: 11,
+                          color: "var(--text-muted)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                        }}
                       >
-                        Nao
+                        Não
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => setDeleteTagConfirmId(tag.id)}
-                      className="rounded-full p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 2,
+                        display: "flex",
+                        color: "var(--accent-hover)",
+                        borderRadius: "50%",
+                      }}
                     >
                       <X size={14} />
                     </button>

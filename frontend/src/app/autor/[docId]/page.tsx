@@ -152,41 +152,36 @@ export default function DocumentDetail() {
     switch (status) {
       case "approved":
         return (
-          <span className="badge-success flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <CheckCircle2 size={14} />
+          <span className="badge-success">
             Aprovado
           </span>
         );
       case "rejected":
         return (
-          <span className="badge-danger flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <XCircle size={14} />
+          <span className="badge-danger">
             Rejeitado
           </span>
         );
       case "pending_analysis":
         return (
-          <span className="badge-warning flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <Clock size={14} />
-            Analise Pendente
+          <span className="badge-warning">
+            Análise Pendente
           </span>
         );
       case "pending_review":
         return (
-          <span className="badge-info flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <AlertCircle size={14} />
-            Revisao Pendente
+          <span className="badge-info">
+            Revisão Pendente
           </span>
         );
       case "formatted":
         return (
-          <span className="badge-success flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <CheckCircle2 size={14} />
+          <span className="badge-success">
             Formatado
           </span>
         );
       default:
-        return <span className="badge-neutral px-3 py-1.5 text-sm">{status}</span>;
+        return <span className="badge-neutral">{status}</span>;
     }
   }
 
@@ -203,8 +198,8 @@ export default function DocumentDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 size={32} className="animate-spin text-indigo-600" />
-        <span className="ml-3 text-sm text-gray-500">
+        <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
+        <span style={{ marginLeft: 12, fontSize: 13.5, color: "var(--text-muted)" }}>
           Carregando documento...
         </span>
       </div>
@@ -216,17 +211,18 @@ export default function DocumentDetail() {
       <div className="p-8 max-w-3xl mx-auto">
         <Link
           href="/autor"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 transition-colors mb-4"
+          style={{ fontSize: 13.5, color: "var(--text-muted)" }}
         >
           <ArrowLeft size={16} />
           Voltar ao painel
         </Link>
         <div className="card text-center py-12">
-          <AlertCircle size={48} className="mx-auto mb-4 text-red-400" />
-          <h3 className="text-lg font-medium text-gray-900">
+          <AlertCircle size={48} className="mx-auto mb-4" style={{ color: "var(--danger)" }} />
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
             Erro ao carregar documento
           </h3>
-          <p className="text-sm text-gray-500 mt-1">{error}</p>
+          <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 4 }}>{error}</p>
           <button onClick={loadDocument} className="btn-primary mt-6">
             <RefreshCw size={18} />
             Tentar novamente
@@ -249,7 +245,8 @@ export default function DocumentDetail() {
       {/* Back link */}
       <Link
         href="/autor"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 transition-colors mb-6"
+        style={{ fontSize: 13.5, color: "var(--text-muted)" }}
       >
         <ArrowLeft size={16} />
         Voltar ao painel
@@ -257,8 +254,16 @@ export default function DocumentDetail() {
 
       {/* Error banner */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid rgba(201, 69, 62, 0.2)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13.5, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
@@ -266,29 +271,38 @@ export default function DocumentDetail() {
       <div className="card mb-6">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100">
-              <FileText size={24} className="text-indigo-600" />
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "var(--radius-md)",
+                background: "var(--accent-light)",
+                border: "1px solid var(--accent-border)",
+              }}
+            >
+              <FileText size={24} style={{ color: "var(--accent)" }} />
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-xl font-bold text-gray-900">
+                <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: "var(--text-primary)" }}>
                   {document.title}
                 </h1>
                 {getStatusBadge(document.status)}
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ fontSize: 13.5, color: "var(--text-secondary)" }}>
                 <span>
-                  Codigo: <strong className="text-gray-700">{document.code}</strong>
+                  Código: <strong style={{ color: "var(--text-primary)" }}>{document.code}</strong>
                 </span>
                 <span>
-                  Versao: <strong className="text-gray-700">v{document.current_version}</strong>
+                  Versão: <strong style={{ color: "var(--text-primary)" }}>v{document.current_version}</strong>
                 </span>
                 <span>Criado em: {formatDate(document.created_at)}</span>
               </div>
               {document.tags && document.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {document.tags.map((tag) => (
-                    <span key={tag} className="badge-neutral">
+                    <span key={tag} className="chip">
                       {tag}
                     </span>
                   ))}
@@ -301,9 +315,7 @@ export default function DocumentDetail() {
 
       {/* Action buttons */}
       <div className="card mb-6">
-        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">
-          Acoes
-        </h3>
+        <h3 className="section-title">Ações</h3>
         <div className="flex flex-wrap gap-3">
           {isPendingAnalysis && (
             <button
@@ -316,7 +328,7 @@ export default function DocumentDetail() {
               ) : (
                 <RefreshCw size={18} />
               )}
-              Executar Analise IA
+              Executar Análise IA
             </button>
           )}
 
@@ -340,7 +352,7 @@ export default function DocumentDetail() {
                 ) : (
                   <SkipForward size={18} />
                 )}
-                Prosseguir sem aprovacao da IA
+                Prosseguir sem aprovação da IA
               </button>
             </>
           )}
@@ -389,11 +401,11 @@ export default function DocumentDetail() {
       {/* Resubmit form */}
       {showResubmit && (
         <div className="card mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", marginBottom: 16 }}>
             Re-submeter Documento
           </h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Selecione uma nova versao do arquivo para re-analise.
+          <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginBottom: 16 }}>
+            Selecione uma nova versão do arquivo para reanálise.
           </p>
           <DocumentUpload
             onFileSelect={setResubmitFile}
@@ -412,7 +424,7 @@ export default function DocumentDetail() {
               ) : (
                 <RefreshCw size={18} />
               )}
-              Enviar nova versao
+              Enviar nova versão
             </button>
             <button
               onClick={() => {
@@ -452,54 +464,50 @@ export default function DocumentDetail() {
       {document.versions && document.versions.length > 0 && (
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
-            <History size={20} className="text-indigo-600" />
-            <h3 className="text-lg font-semibold text-gray-900">
-              Historico de Versoes
+            <History size={20} style={{ color: "var(--accent)" }} />
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
+              Histórico de Versões
             </h3>
           </div>
-          <div className="overflow-hidden rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Versao
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    IA
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Data
-                  </th>
+                  <th>Versão</th>
+                  <th>Status</th>
+                  <th>IA</th>
+                  <th>Data</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {[...document.versions].reverse().map((v) => (
-                  <tr key={v.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      v{v.version_number}
+                  <tr key={v.id}>
+                    <td>
+                      <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                        v{v.version_number}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm">
+                    <td>
                       {getStatusBadge(v.status)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       {v.ai_approved === true && (
                         <CheckCircle2
                           size={18}
-                          className="text-green-500"
+                          style={{ color: "var(--success)" }}
                         />
                       )}
                       {v.ai_approved === false && (
-                        <XCircle size={18} className="text-red-500" />
+                        <XCircle size={18} style={{ color: "var(--danger)" }} />
                       )}
                       {v.ai_approved === null && (
-                        <Clock size={18} className="text-gray-400" />
+                        <Clock size={18} style={{ color: "var(--text-muted)" }} />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDate(v.submitted_at)}
+                    <td>
+                      <span style={{ color: "var(--text-secondary)" }}>
+                        {formatDate(v.submitted_at)}
+                      </span>
                     </td>
                   </tr>
                 ))}

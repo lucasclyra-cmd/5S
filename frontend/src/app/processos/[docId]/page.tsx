@@ -11,7 +11,6 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
-  Clock,
 } from "lucide-react";
 import {
   getDocument,
@@ -99,7 +98,7 @@ export default function ProcessosReviewPage() {
     const version = getCurrentVersion();
     if (!version) return;
     if (!rejectComments.trim()) {
-      setError("Adicione comentarios para a rejeicao.");
+      setError("Adicione comentários para a rejeição.");
       return;
     }
     setActionLoading("reject");
@@ -116,34 +115,30 @@ export default function ProcessosReviewPage() {
     switch (status) {
       case "approved":
         return (
-          <span className="badge-success flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <CheckCircle2 size={14} />
+          <span className="badge-success">
             Aprovado
           </span>
         );
       case "rejected":
         return (
-          <span className="badge-danger flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <XCircle size={14} />
+          <span className="badge-danger">
             Rejeitado
           </span>
         );
       case "pending_analysis":
         return (
-          <span className="badge-warning flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <Clock size={14} />
-            Analise Pendente
+          <span className="badge-warning">
+            Análise Pendente
           </span>
         );
       case "pending_review":
         return (
-          <span className="badge-info flex items-center gap-1.5 px-3 py-1.5 text-sm">
-            <AlertCircle size={14} />
-            Revisao Pendente
+          <span className="badge-info">
+            Revisão Pendente
           </span>
         );
       default:
-        return <span className="badge-neutral px-3 py-1.5 text-sm">{status}</span>;
+        return <span className="badge-neutral">{status}</span>;
     }
   }
 
@@ -160,8 +155,8 @@ export default function ProcessosReviewPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 size={32} className="animate-spin text-indigo-600" />
-        <span className="ml-3 text-sm text-gray-500">
+        <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
+        <span style={{ marginLeft: 12, fontSize: 13, color: "var(--text-muted)" }}>
           Carregando documento...
         </span>
       </div>
@@ -173,17 +168,18 @@ export default function ProcessosReviewPage() {
       <div className="p-8 max-w-3xl mx-auto">
         <Link
           href="/processos"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 transition-colors mb-4"
+          style={{ fontSize: 13, color: "var(--text-muted)" }}
         >
           <ArrowLeft size={16} />
-          Voltar a fila
+          Voltar à fila
         </Link>
         <div className="card text-center py-12">
-          <AlertCircle size={48} className="mx-auto mb-4 text-red-400" />
-          <h3 className="text-lg font-medium text-gray-900">
+          <AlertCircle size={48} className="mx-auto mb-4" style={{ color: "var(--danger)" }} />
+          <h3 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-primary)" }}>
             Erro ao carregar documento
           </h3>
-          <p className="text-sm text-gray-500 mt-1">{error}</p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>{error}</p>
           <button onClick={loadDocument} className="btn-primary mt-6">
             <RefreshCw size={18} />
             Tentar novamente
@@ -202,7 +198,8 @@ export default function ProcessosReviewPage() {
       {/* Back link */}
       <Link
         href="/processos"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-6"
+        className="inline-flex items-center gap-1.5 transition-colors mb-6"
+        style={{ fontSize: 13, color: "var(--text-muted)" }}
       >
         <ArrowLeft size={16} />
         Voltar a fila
@@ -210,40 +207,60 @@ export default function ProcessosReviewPage() {
 
       {/* Error banner */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--danger)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
       {/* Document header */}
       <div className="card mb-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100">
-            <FileText size={24} className="text-indigo-600" />
+          <div
+            className="flex items-center justify-center shrink-0"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "var(--radius-md)",
+              background: "var(--accent-light)",
+              border: "1px solid var(--accent-border)",
+            }}
+          >
+            <FileText size={24} style={{ color: "var(--accent)" }} />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-xl font-bold text-gray-900">
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>
                 {document.title}
               </h1>
               {getStatusBadge(document.status)}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+            <div
+              className="flex flex-wrap items-center gap-x-4 gap-y-1"
+              style={{ fontSize: 13, color: "var(--text-secondary)" }}
+            >
               <span>
-                Codigo: <strong className="text-gray-700">{document.code}</strong>
+                Código: <strong style={{ color: "var(--text-primary)" }}>{document.code}</strong>
               </span>
               <span>
-                Versao: <strong className="text-gray-700">v{document.current_version}</strong>
+                Versão: <strong style={{ color: "var(--text-primary)" }}>v{document.current_version}</strong>
               </span>
               <span>
-                Autor: <strong className="text-gray-700">{document.created_by_profile}</strong>
+                Autor: <strong style={{ color: "var(--text-primary)" }}>{document.created_by_profile}</strong>
               </span>
               <span>Criado em: {formatDate(document.created_at)}</span>
             </div>
             {document.tags && document.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {document.tags.map((tag) => (
-                  <span key={tag} className="badge-neutral">
+                  <span key={tag} className="chip">
                     {tag}
                   </span>
                 ))}
@@ -255,8 +272,8 @@ export default function ProcessosReviewPage() {
 
       {/* Review actions */}
       <div className="card mb-6">
-        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">
-          Decisao de Revisao
+        <h3 className="section-title">
+          Decisão de Revisão
         </h3>
         <div className="flex flex-wrap gap-3">
           <button
@@ -283,12 +300,12 @@ export default function ProcessosReviewPage() {
 
         {/* Reject form */}
         {showRejectForm && (
-          <div className="mt-4 border-t border-gray-200 pt-4">
-            <label className="label-field">Comentarios da Rejeicao</label>
+          <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+            <label className="label-field">Comentários da Rejeição</label>
             <textarea
               value={rejectComments}
               onChange={(e) => setRejectComments(e.target.value)}
-              placeholder="Explique o motivo da rejeicao..."
+              placeholder="Explique o motivo da rejeição..."
               rows={4}
               className="input-field resize-none"
               disabled={actionLoading !== null}
@@ -306,7 +323,7 @@ export default function ProcessosReviewPage() {
                 ) : (
                   <XCircle size={18} />
                 )}
-                Confirmar Rejeicao
+                Confirmar Rejeição
               </button>
               <button
                 onClick={() => {

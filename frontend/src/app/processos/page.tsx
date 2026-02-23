@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { getWorkflowQueue } from "@/lib/api";
 import type { WorkflowItem } from "@/types";
 import WorkflowQueueComponent from "@/components/WorkflowQueue";
@@ -24,7 +24,7 @@ export default function ProcessosDashboard() {
       const data = await getWorkflowQueue();
       setItems(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      setError(err.message || "Erro ao carregar fila de revisao");
+      setError(err.message || "Erro ao carregar fila de revisão");
       setItems([]);
     } finally {
       setLoading(false);
@@ -43,11 +43,11 @@ export default function ProcessosDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Fila de Revisao
+          <h1 style={{ color: "var(--text-primary)" }}>
+            Fila de Revisão
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Documentos pendentes de aprovacao do setor de Processos.
+          <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
+            Documentos pendentes de aprovação do setor de Processos.
           </p>
         </div>
         <button onClick={loadQueue} className="btn-secondary" disabled={loading}>
@@ -62,53 +62,44 @@ export default function ProcessosDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
-            <ClipboardList size={24} className="text-amber-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {pendingItems.length}
-            </p>
-            <p className="text-sm text-gray-500">Pendentes</p>
-          </div>
+        <div className="stat-card">
+          <p className="stat-label">Pendentes</p>
+          <p className="stat-value">{pendingItems.length}</p>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100">
-            <ClipboardList size={24} className="text-green-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {resolvedItems.filter((i) => i.action === "approved").length}
-            </p>
-            <p className="text-sm text-gray-500">Aprovados</p>
-          </div>
+        <div className="stat-card">
+          <p className="stat-label">Aprovados</p>
+          <p className="stat-value">
+            {resolvedItems.filter((i) => i.action === "approved").length}
+          </p>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100">
-            <ClipboardList size={24} className="text-red-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {resolvedItems.filter((i) => i.action === "rejected").length}
-            </p>
-            <p className="text-sm text-gray-500">Rejeitados</p>
-          </div>
+        <div className="stat-card">
+          <p className="stat-label">Rejeitados</p>
+          <p className="stat-value">
+            {resolvedItems.filter((i) => i.action === "rejected").length}
+          </p>
         </div>
       </div>
 
       {/* Error state */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--danger)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
-          <span className="ml-3 text-sm text-gray-500">
+          <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ marginLeft: 12, fontSize: 13, color: "var(--text-muted)" }}>
             Carregando fila...
           </span>
         </div>
@@ -117,7 +108,7 @@ export default function ProcessosDashboard() {
       {/* Queue */}
       {!loading && (
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          <h2 style={{ color: "var(--text-primary)", marginBottom: 16 }}>
             Documentos Pendentes
           </h2>
           <WorkflowQueueComponent
@@ -127,7 +118,7 @@ export default function ProcessosDashboard() {
 
           {resolvedItems.length > 0 && (
             <div className="mt-8">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              <h2 style={{ color: "var(--text-primary)", marginBottom: 16 }}>
                 Documentos Resolvidos
               </h2>
               <WorkflowQueueComponent

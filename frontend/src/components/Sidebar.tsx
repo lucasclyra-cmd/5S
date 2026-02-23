@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useProfile, ProfileType } from "@/lib/profile-context";
@@ -10,62 +10,69 @@ import {
   ClipboardList,
   Settings,
   FolderTree,
-  Tag,
   LayoutTemplate,
   ShieldCheck,
   Home,
-  ChevronLeft,
-  ChevronRight,
-  User,
   LogOut,
 } from "lucide-react";
 
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
+interface NavSection {
+  title?: string;
+  items: { label: string; href: string; icon: React.ReactNode }[];
 }
 
-const navItemsByProfile: Record<string, NavItem[]> = {
+const navByProfile: Record<string, NavSection[]> = {
   autor: [
     {
-      label: "Painel",
-      href: "/autor",
-      icon: <Home size={20} />,
-    },
-    {
-      label: "Submeter Documento",
-      href: "/autor/submeter",
-      icon: <Upload size={20} />,
+      title: "Documentos",
+      items: [
+        { label: "Painel", href: "/autor", icon: <Home size={18} /> },
+        {
+          label: "Submeter Documento",
+          href: "/autor/submeter",
+          icon: <Upload size={18} />,
+        },
+      ],
     },
   ],
   processos: [
     {
-      label: "Fila de Revisao",
-      href: "/processos",
-      icon: <ClipboardList size={20} />,
+      title: "Revisão",
+      items: [
+        {
+          label: "Fila de Revisão",
+          href: "/processos",
+          icon: <ClipboardList size={18} />,
+        },
+      ],
     },
   ],
   admin: [
     {
-      label: "Painel Admin",
-      href: "/admin",
-      icon: <Settings size={20} />,
+      title: "Administração",
+      items: [
+        { label: "Painel", href: "/admin", icon: <Settings size={18} /> },
+      ],
     },
     {
-      label: "Templates",
-      href: "/admin/templates",
-      icon: <LayoutTemplate size={20} />,
-    },
-    {
-      label: "Regras de Analise",
-      href: "/admin/regras",
-      icon: <ShieldCheck size={20} />,
-    },
-    {
-      label: "Categorias e Tags",
-      href: "/admin/categorias",
-      icon: <FolderTree size={20} />,
+      title: "Configurações",
+      items: [
+        {
+          label: "Templates",
+          href: "/admin/templates",
+          icon: <LayoutTemplate size={18} />,
+        },
+        {
+          label: "Regras de Análise",
+          href: "/admin/regras",
+          icon: <ShieldCheck size={18} />,
+        },
+        {
+          label: "Categorias e Tags",
+          href: "/admin/categorias",
+          icon: <FolderTree size={18} />,
+        },
+      ],
     },
   ],
 };
@@ -79,122 +86,150 @@ const profileLabels: Record<string, string> = {
 export default function Sidebar() {
   const { profile, setProfile } = useProfile();
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
 
   if (!profile || pathname === "/") {
     return null;
   }
 
-  const navItems = navItemsByProfile[profile] || [];
+  const sections = navByProfile[profile] || [];
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-gray-200 bg-white transition-all duration-200 ${
-        collapsed ? "w-16" : "w-64"
-      }`}
+      className="fixed inset-y-0 left-0 z-30 flex w-[240px] flex-col"
+      style={{ background: "var(--bg-sidebar)" }}
     >
       {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4">
-        {!collapsed && (
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-sm">
+      <div className="px-5 pt-6 pb-5">
+        <Link href="/" className="block">
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg font-bold text-sm"
+              style={{ background: "var(--accent)", color: "var(--bg-sidebar)" }}
+            >
               5S
             </div>
-            <span className="text-lg font-bold text-gray-900">
-              5S Docs
-            </span>
-          </Link>
-        )}
-        {collapsed && (
-          <Link
-            href="/"
-            className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-sm"
-          >
-            5S
-          </Link>
-        )}
-      </div>
-
-      {/* Profile badge */}
-      <div className="border-b border-gray-200 px-4 py-3">
-        {!collapsed ? (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-              <User size={16} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {profileLabels[profile]}
-              </p>
-              <p className="text-xs text-gray-500">Perfil ativo</p>
+            <div>
+              <div className="text-[15px] font-bold text-white leading-tight">
+                5S Docs
+              </div>
+              <div
+                className="text-[10px] font-medium uppercase tracking-[1.2px]"
+                style={{ color: "rgba(255,255,255,0.35)" }}
+              >
+                Tex Cotton
+              </div>
             </div>
           </div>
-        ) : (
-          <div className="flex justify-center">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
-              <User size={16} />
-            </div>
-          </div>
-        )}
+        </Link>
       </div>
 
-      {/* Nav items */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-indigo-50 text-indigo-700"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <span
-                    className={
-                      isActive ? "text-indigo-600" : "text-gray-400"
-                    }
-                  >
-                    {item.icon}
-                  </span>
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3">
+        {sections.map((section, si) => (
+          <div key={si} className={si > 0 ? "mt-6" : ""}>
+            {section.title && (
+              <div
+                className="px-3 mb-2"
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "1.2px",
+                  color: "rgba(255,255,255,0.3)",
+                }}
+              >
+                {section.title}
+              </div>
+            )}
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (item.href !== "/" &&
+                    item.href !== "/autor" &&
+                    item.href !== "/processos" &&
+                    item.href !== "/admin" &&
+                    pathname.startsWith(item.href));
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className="flex items-center gap-3 rounded-lg px-3 transition-all duration-150"
+                      style={{
+                        padding: "9px 12px",
+                        borderRadius: "8px",
+                        background: isActive ? "var(--accent)" : "transparent",
+                        color: isActive
+                          ? "var(--bg-sidebar)"
+                          : "rgba(255,255,255,0.55)",
+                        fontWeight: isActive ? 600 : 400,
+                        fontSize: "13.5px",
+                      }}
+                    >
+                      <span style={{ display: "flex", alignItems: "center" }}>
+                        {item.icon}
+                      </span>
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-gray-200 px-3 py-3 space-y-1">
+      <div className="px-3 pb-4 mt-auto">
+        <div
+          className="mb-3 mx-3"
+          style={{
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            paddingTop: "12px",
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg-sidebar)",
+              }}
+            >
+              {profileLabels[profile]?.[0] || "?"}
+            </div>
+            <div>
+              <div className="text-[13px] font-medium text-white leading-tight">
+                {profileLabels[profile]}
+              </div>
+              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>
+                Perfil ativo
+              </div>
+            </div>
+          </div>
+        </div>
         <button
           onClick={() => {
             setProfile(null);
             window.location.href = "/";
           }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-          title={collapsed ? "Trocar Perfil" : undefined}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-all duration-150"
+          style={{
+            color: "rgba(255,255,255,0.45)",
+            fontSize: "13px",
+            borderRadius: "8px",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+            e.currentTarget.style.color = "rgba(255,255,255,0.8)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+          }}
         >
-          <LogOut size={20} className="text-gray-400" />
-          {!collapsed && <span>Trocar Perfil</span>}
-        </button>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-          title={collapsed ? "Expandir" : "Recolher"}
-        >
-          {collapsed ? (
-            <ChevronRight size={20} className="text-gray-400" />
-          ) : (
-            <>
-              <ChevronLeft size={20} className="text-gray-400" />
-              <span>Recolher</span>
-            </>
-          )}
+          <LogOut size={16} />
+          Trocar Perfil
         </button>
       </div>
     </aside>

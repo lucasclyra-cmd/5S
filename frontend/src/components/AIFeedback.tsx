@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, XCircle, AlertCircle, Lightbulb } from "lucide-react";
+import { CheckCircle2, XCircle, Lightbulb } from "lucide-react";
 import type { AIAnalysis } from "@/types";
 
 interface AIFeedbackProps {
@@ -21,29 +21,26 @@ export default function AIFeedback({ analysis }: AIFeedbackProps) {
     <div className="card">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">
-            Analise de IA
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
+            Análise de IA
           </h3>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
             Agente: {analysis.agent_type}
           </p>
         </div>
         <div>
           {analysis.approved === true && (
-            <span className="badge-success flex items-center gap-1.5 px-3 py-1.5 text-sm">
-              <CheckCircle2 size={16} />
+            <span className="badge-success">
               Aprovado
             </span>
           )}
           {analysis.approved === false && (
-            <span className="badge-danger flex items-center gap-1.5 px-3 py-1.5 text-sm">
-              <XCircle size={16} />
+            <span className="badge-danger">
               Rejeitado
             </span>
           )}
           {analysis.approved === null && (
-            <span className="badge-warning flex items-center gap-1.5 px-3 py-1.5 text-sm">
-              <AlertCircle size={16} />
+            <span className="badge-warning">
               Pendente
             </span>
           )}
@@ -53,18 +50,29 @@ export default function AIFeedback({ analysis }: AIFeedbackProps) {
       {/* Progress bar */}
       {totalCount > 0 && (
         <div className="mb-6">
-          <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-gray-600">
+          <div className="flex items-center justify-between mb-2" style={{ fontSize: 13 }}>
+            <span style={{ color: "var(--text-secondary)" }}>
               {approvedCount} de {totalCount} itens aprovados
             </span>
-            <span className="font-medium text-gray-900">
+            <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>
               {Math.round((approvedCount / totalCount) * 100)}%
             </span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+          <div
+            style={{
+              height: 8,
+              width: "100%",
+              overflow: "hidden",
+              borderRadius: 100,
+              background: "var(--bg-main)",
+            }}
+          >
             <div
-              className="h-full rounded-full bg-green-500 transition-all"
               style={{
+                height: "100%",
+                borderRadius: 100,
+                background: "var(--success)",
+                transition: "all 0.3s ease",
                 width: `${(approvedCount / totalCount) * 100}%`,
               }}
             />
@@ -77,41 +85,56 @@ export default function AIFeedback({ analysis }: AIFeedbackProps) {
         {analysis.feedback_items.map((item, index) => (
           <div
             key={index}
-            className={`rounded-lg border p-4 ${
-              item.status === "approved"
-                ? "border-green-200 bg-green-50"
-                : "border-red-200 bg-red-50"
-            }`}
+            style={{
+              borderRadius: "var(--radius-sm)",
+              border: `1px solid ${item.status === "approved" ? "var(--success)" : "var(--danger)"}`,
+              background: item.status === "approved"
+                ? "rgba(45, 138, 78, 0.04)"
+                : "rgba(201, 69, 62, 0.04)",
+              padding: 16,
+            }}
           >
             <div className="flex items-start gap-3">
               {item.status === "approved" ? (
                 <CheckCircle2
                   size={20}
-                  className="mt-0.5 shrink-0 text-green-600"
+                  className="mt-0.5 shrink-0"
+                  style={{ color: "var(--success)" }}
                 />
               ) : (
                 <XCircle
                   size={20}
-                  className="mt-0.5 shrink-0 text-red-600"
+                  className="mt-0.5 shrink-0"
+                  style={{ color: "var(--danger)" }}
                 />
               )}
               <div className="flex-1 min-w-0">
                 <p
-                  className={`text-sm font-medium ${
-                    item.status === "approved"
-                      ? "text-green-900"
-                      : "text-red-900"
-                  }`}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: item.status === "approved"
+                      ? "var(--success)"
+                      : "var(--danger)",
+                  }}
                 >
                   {item.item}
                 </p>
                 {item.suggestion && (
-                  <div className="mt-2 flex items-start gap-2 rounded-md bg-white/60 p-2.5">
+                  <div
+                    className="mt-2 flex items-start gap-2"
+                    style={{
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--bg-card)",
+                      padding: 10,
+                    }}
+                  >
                     <Lightbulb
                       size={16}
-                      className="mt-0.5 shrink-0 text-amber-500"
+                      className="mt-0.5 shrink-0"
+                      style={{ color: "var(--warning)" }}
                     />
-                    <p className="text-xs text-gray-700">
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                       {item.suggestion}
                     </p>
                   </div>
@@ -123,8 +146,8 @@ export default function AIFeedback({ analysis }: AIFeedbackProps) {
       </div>
 
       {analysis.feedback_items.length === 0 && (
-        <p className="text-sm text-gray-500 text-center py-4">
-          Nenhum item de feedback disponivel.
+        <p className="text-center py-4" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          Nenhum item de feedback disponível.
         </p>
       )}
     </div>

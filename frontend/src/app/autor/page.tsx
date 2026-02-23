@@ -72,49 +72,43 @@ export default function AutorDashboard() {
     switch (status) {
       case "approved":
         return (
-          <span className="badge-success flex items-center gap-1 w-fit">
-            <CheckCircle2 size={12} />
+          <span className="badge-success">
             Aprovado
           </span>
         );
       case "rejected":
         return (
-          <span className="badge-danger flex items-center gap-1 w-fit">
-            <XCircle size={12} />
+          <span className="badge-danger">
             Rejeitado
           </span>
         );
       case "pending_analysis":
         return (
-          <span className="badge-warning flex items-center gap-1 w-fit">
-            <Clock size={12} />
-            Analise Pendente
+          <span className="badge-warning">
+            Análise Pendente
           </span>
         );
       case "pending_review":
         return (
-          <span className="badge-info flex items-center gap-1 w-fit">
-            <AlertCircle size={12} />
-            Revisao Pendente
+          <span className="badge-info">
+            Revisão Pendente
           </span>
         );
       case "formatted":
         return (
-          <span className="badge-success flex items-center gap-1 w-fit">
-            <CheckCircle2 size={12} />
+          <span className="badge-success">
             Formatado
           </span>
         );
       case "published":
         return (
-          <span className="badge-success flex items-center gap-1 w-fit">
-            <CheckCircle2 size={12} />
+          <span className="badge-success">
             Publicado
           </span>
         );
       default:
         return (
-          <span className="badge-neutral flex items-center gap-1 w-fit">
+          <span className="badge-neutral">
             {status}
           </span>
         );
@@ -150,11 +144,11 @@ export default function AutorDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 style={{ color: "var(--text-primary)" }}>
             Painel do Autor
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Gerencie seus documentos e acompanhe o status de analise.
+          <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 4 }}>
+            Gerencie seus documentos e acompanhe o status de análise.
           </p>
         </div>
         <Link href="/autor/submeter" className="btn-primary">
@@ -165,49 +159,25 @@ export default function AutorDashboard() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-100">
-            <BarChart3 size={24} className="text-indigo-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.total}
-            </p>
-            <p className="text-sm text-gray-500">Total</p>
-          </div>
+        <div className="stat-card">
+          <div className="stat-label">Total</div>
+          <div className="stat-value">{stats.total}</div>
+          <div className="stat-sub">documentos submetidos</div>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
-            <Clock size={24} className="text-amber-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.pending}
-            </p>
-            <p className="text-sm text-gray-500">Pendentes</p>
-          </div>
+        <div className="stat-card">
+          <div className="stat-label">Pendentes</div>
+          <div className="stat-value" style={{ color: "var(--warning)" }}>{stats.pending}</div>
+          <div className="stat-sub">aguardando análise</div>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100">
-            <CheckCircle2 size={24} className="text-green-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.approved}
-            </p>
-            <p className="text-sm text-gray-500">Aprovados</p>
-          </div>
+        <div className="stat-card">
+          <div className="stat-label">Aprovados</div>
+          <div className="stat-value" style={{ color: "var(--success)" }}>{stats.approved}</div>
+          <div className="stat-sub">prontos ou publicados</div>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100">
-            <XCircle size={24} className="text-red-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900">
-              {stats.rejected}
-            </p>
-            <p className="text-sm text-gray-500">Rejeitados</p>
-          </div>
+        <div className="stat-card">
+          <div className="stat-label">Rejeitados</div>
+          <div className="stat-value" style={{ color: "var(--danger)" }}>{stats.rejected}</div>
+          <div className="stat-sub">necessitam revisão</div>
         </div>
       </div>
 
@@ -216,11 +186,12 @@ export default function AutorDashboard() {
         <div className="relative flex-1">
           <Search
             size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2"
+            style={{ color: "var(--text-muted)" }}
           />
           <input
             type="text"
-            placeholder="Buscar por codigo ou titulo..."
+            placeholder="Buscar por código ou título..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -248,16 +219,24 @@ export default function AutorDashboard() {
 
       {/* Error state */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid rgba(201, 69, 62, 0.2)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13.5, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-indigo-600" />
-          <span className="ml-3 text-sm text-gray-500">
+          <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ marginLeft: 12, fontSize: 13.5, color: "var(--text-muted)" }}>
             Carregando documentos...
           </span>
         </div>
@@ -266,11 +245,11 @@ export default function AutorDashboard() {
       {/* Empty state */}
       {!loading && !error && documents.length === 0 && (
         <div className="card text-center py-16">
-          <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">
+          <FileText size={48} className="mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
             Nenhum documento encontrado
           </h3>
-          <p className="text-sm text-gray-500 mt-1 mb-6">
+          <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 4, marginBottom: 24 }}>
             Comece submetendo seu primeiro documento.
           </p>
           <Link href="/autor/submeter" className="btn-primary">
@@ -282,82 +261,71 @@ export default function AutorDashboard() {
 
       {/* Documents table */}
       {!loading && documents.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="table-container">
+          <table>
+            <thead>
               <tr>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Codigo
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Titulo
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Versao
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Status
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Tags
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Data
-                </th>
-                <th className="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Acao
-                </th>
+                <th>Código</th>
+                <th>Título</th>
+                <th>Versão</th>
+                <th>Status</th>
+                <th>Tags</th>
+                <th>Data</th>
+                <th style={{ textAlign: "right" }}>Ação</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {documents.map((doc) => (
                 <tr
                   key={doc.id}
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="cursor-pointer"
                   onClick={() => router.push(`/autor/${doc.code}`)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-indigo-600">
+                  <td>
+                    <span style={{ fontWeight: 600, color: "var(--accent)" }}>
                       {doc.code}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-gray-900">
+                  <td>
+                    <span style={{ color: "var(--text-primary)" }}>
                       {doc.title}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-500">
+                  <td>
+                    <span style={{ color: "var(--text-secondary)" }}>
                       v{doc.current_version}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td>
                     {getStatusBadge(doc.status)}
                   </td>
-                  <td className="px-6 py-4">
+                  <td>
                     <div className="flex flex-wrap gap-1">
                       {doc.tags?.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
-                          className="badge-neutral text-xs"
+                          className="chip"
                         >
                           {tag}
                         </span>
                       ))}
                       {doc.tags && doc.tags.length > 3 && (
-                        <span className="badge-neutral text-xs">
+                        <span className="chip">
                           +{doc.tags.length - 3}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-500">
+                  <td>
+                    <span style={{ color: "var(--text-secondary)" }}>
                       {formatDate(doc.created_at)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className="inline-flex items-center gap-1 text-sm text-indigo-600 font-medium">
+                  <td style={{ textAlign: "right" }}>
+                    <span
+                      className="inline-flex items-center gap-1"
+                      style={{ fontSize: 13.5, color: "var(--accent)", fontWeight: 600 }}
+                    >
                       Ver
                       <ChevronRight size={16} />
                     </span>

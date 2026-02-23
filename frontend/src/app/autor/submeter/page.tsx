@@ -64,11 +64,11 @@ export default function SubmeterDocumento() {
       return;
     }
     if (!code.trim()) {
-      setError("Preencha o codigo do documento.");
+      setError("Preencha o código do documento.");
       return;
     }
     if (!title.trim()) {
-      setError("Preencha o titulo do documento.");
+      setError("Preencha o título do documento.");
       return;
     }
 
@@ -96,23 +96,32 @@ export default function SubmeterDocumento() {
       <div className="mb-8">
         <Link
           href="/autor"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 transition-colors mb-4"
+          style={{ fontSize: 13.5, color: "var(--text-muted)" }}
         >
           <ArrowLeft size={16} />
           Voltar ao painel
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 style={{ color: "var(--text-primary)" }}>
           Submeter Novo Documento
         </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Envie um documento para analise automatica pela IA.
+        <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 4 }}>
+          Envie um documento para análise automática pela IA.
         </p>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div
+          className="mb-6"
+          style={{
+            borderRadius: "var(--radius-md)",
+            border: "1px solid rgba(201, 69, 62, 0.2)",
+            background: "rgba(201, 69, 62, 0.06)",
+            padding: 16,
+          }}
+        >
+          <p style={{ fontSize: 13.5, color: "var(--danger)" }}>{error}</p>
         </div>
       )}
 
@@ -131,7 +140,7 @@ export default function SubmeterDocumento() {
         {/* Code */}
         <div>
           <label htmlFor="code" className="label-field">
-            Codigo do Documento
+            Código do Documento
           </label>
           <input
             id="code"
@@ -142,22 +151,22 @@ export default function SubmeterDocumento() {
             className="input-field"
             disabled={uploading}
           />
-          <p className="mt-1 text-xs text-gray-400">
-            Identificador unico do documento no sistema.
+          <p style={{ marginTop: 4, fontSize: 12, color: "var(--text-muted)" }}>
+            Identificador único do documento no sistema.
           </p>
         </div>
 
         {/* Title */}
         <div>
           <label htmlFor="title" className="label-field">
-            Titulo
+            Título
           </label>
           <input
             id="title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: Procedimento de Seguranca do Trabalho"
+            placeholder="Ex: Procedimento de Segurança do Trabalho"
             className="input-field"
             disabled={uploading}
           />
@@ -195,13 +204,14 @@ export default function SubmeterDocumento() {
             {selectedTags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1 text-sm text-indigo-700"
+                className="chip inline-flex items-center gap-1"
               >
                 {tag}
                 <button
                   type="button"
                   onClick={() => removeTag(tag)}
-                  className="rounded-full p-0.5 hover:bg-indigo-200 transition-colors"
+                  className="rounded-full p-0.5 transition-colors"
+                  style={{ color: "var(--accent-hover)" }}
                   disabled={uploading}
                 >
                   <X size={12} />
@@ -239,7 +249,7 @@ export default function SubmeterDocumento() {
         </div>
 
         {/* Submit */}
-        <div className="pt-4 border-t border-gray-200">
+        <div style={{ paddingTop: 16, borderTop: "1px solid var(--border)" }}>
           <button
             type="submit"
             disabled={uploading || !file || !code.trim() || !title.trim()}
