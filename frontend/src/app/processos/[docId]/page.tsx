@@ -25,6 +25,8 @@ import type {
   AIAnalysis,
   Changelog,
 } from "@/types";
+import { formatDateTime } from "@/lib/format";
+import StatusBadge from "@/components/StatusBadge";
 import AIFeedback from "@/components/AIFeedback";
 import ChangelogViewer from "@/components/ChangelogViewer";
 import DocumentPreview from "@/components/DocumentPreview";
@@ -109,47 +111,6 @@ export default function ProcessosReviewPage() {
       setError(err.message || "Erro ao rejeitar documento");
       setActionLoading(null);
     }
-  }
-
-  function getStatusBadge(status: string) {
-    switch (status) {
-      case "approved":
-        return (
-          <span className="badge-success">
-            Aprovado
-          </span>
-        );
-      case "rejected":
-        return (
-          <span className="badge-danger">
-            Rejeitado
-          </span>
-        );
-      case "pending_analysis":
-        return (
-          <span className="badge-warning">
-            Análise Pendente
-          </span>
-        );
-      case "pending_review":
-        return (
-          <span className="badge-info">
-            Revisão Pendente
-          </span>
-        );
-      default:
-        return <span className="badge-neutral">{status}</span>;
-    }
-  }
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   }
 
   if (loading) {
@@ -240,7 +201,7 @@ export default function ProcessosReviewPage() {
               <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>
                 {document.title}
               </h1>
-              {getStatusBadge(document.status)}
+              <StatusBadge status={document.status} />
             </div>
             <div
               className="flex flex-wrap items-center gap-x-4 gap-y-1"
@@ -255,7 +216,7 @@ export default function ProcessosReviewPage() {
               <span>
                 Autor: <strong style={{ color: "var(--text-primary)" }}>{document.created_by_profile}</strong>
               </span>
-              <span>Criado em: {formatDate(document.created_at)}</span>
+              <span>Criado em: {formatDateTime(document.created_at)}</span>
             </div>
             {document.tags && document.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">

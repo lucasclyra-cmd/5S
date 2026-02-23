@@ -319,16 +319,7 @@ export async function updateAdminConfig(
   });
 }
 
-export async function deleteAdminConfig(id: number): Promise<void> {
-  // Try templates first since that's the most common
-  // The backend routes are type-specific, but for delete we need to know the type
-  // Since the admin pages know the type, this will work with the specific endpoint
-  return request(`/api/admin/templates/${id}`, {
-    method: "DELETE",
-  });
-}
-
-export async function deleteAdminConfigByType(id: number, configType: string): Promise<void> {
+export async function deleteAdminConfig(id: number, configType: string): Promise<void> {
   const endpoint = configTypeToEndpoint(configType);
   return request(`/api/admin/${endpoint}/${id}`, {
     method: "DELETE",

@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.document import Document
 from app.models.version import DocumentVersion
 from app.models.workflow import WorkflowQueue
 

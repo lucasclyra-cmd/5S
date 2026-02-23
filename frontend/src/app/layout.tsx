@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { ProfileProvider } from "@/lib/profile-context";
-import Sidebar from "@/components/Sidebar";
 import { ClientLayout } from "@/components/ClientLayout";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "5S - Sistema de Automacao de Documentos",
+  title: "5S - Sistema de Automacao de Documentos | Tex Cotton",
   description:
     "Sistema corporativo de automacao de documentos com analise de IA",
 };
@@ -20,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>
+      <body>
         <ProfileProvider>
           <ClientLayout>{children}</ClientLayout>
         </ProfileProvider>

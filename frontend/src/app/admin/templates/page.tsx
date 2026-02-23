@@ -176,7 +176,7 @@ export default function TemplatesPage() {
   async function handleDelete(id: number) {
     setError(null);
     try {
-      await deleteAdminConfig(id);
+      await deleteAdminConfig(id, "template");
       setDeleteConfirmId(null);
       await loadData();
     } catch (err: any) {

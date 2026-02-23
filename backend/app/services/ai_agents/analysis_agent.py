@@ -60,10 +60,9 @@ async def analyze(
     if "feedback_items" not in result:
         result["feedback_items"] = []
     if "approved" not in result:
-        result["approved"] = len([
-            item for item in result["feedback_items"]
-            if item.get("status") == "rejected"
-        ]) == 0
+        result["approved"] = all(
+            item.get("status") != "rejected" for item in result["feedback_items"]
+        )
 
     return result
 

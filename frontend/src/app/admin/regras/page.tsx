@@ -16,7 +16,7 @@ import {
   getAdminConfigs,
   createAdminConfig,
   updateAdminConfig,
-  deleteAdminConfigByType,
+  deleteAdminConfig,
   getCategories,
 } from "@/lib/api";
 import type { AdminConfig, Category } from "@/types";
@@ -152,7 +152,7 @@ export default function RegrasPage() {
   async function handleDelete(id: number) {
     setError(null);
     try {
-      await deleteAdminConfigByType(id, "analysis_rules");
+      await deleteAdminConfig(id, "analysis_rules");
       setDeleteConfirmId(null);
       await loadData();
     } catch (err: any) {

@@ -7,16 +7,12 @@ import {
   FileText,
   Plus,
   Search,
-  Filter,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
   Loader2,
   ChevronRight,
-  BarChart3,
 } from "lucide-react";
 import { getDocuments, searchDocuments } from "@/lib/api";
+import { formatDate } from "@/lib/format";
+import StatusBadge from "@/components/StatusBadge";
 import type { Document } from "@/types";
 
 export default function AutorDashboard() {
@@ -66,61 +62,6 @@ export default function AutorDashboard() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function getStatusBadge(status: string) {
-    switch (status) {
-      case "approved":
-        return (
-          <span className="badge-success">
-            Aprovado
-          </span>
-        );
-      case "rejected":
-        return (
-          <span className="badge-danger">
-            Rejeitado
-          </span>
-        );
-      case "pending_analysis":
-        return (
-          <span className="badge-warning">
-            Análise Pendente
-          </span>
-        );
-      case "pending_review":
-        return (
-          <span className="badge-info">
-            Revisão Pendente
-          </span>
-        );
-      case "formatted":
-        return (
-          <span className="badge-success">
-            Formatado
-          </span>
-        );
-      case "published":
-        return (
-          <span className="badge-success">
-            Publicado
-          </span>
-        );
-      default:
-        return (
-          <span className="badge-neutral">
-            {status}
-          </span>
-        );
-    }
-  }
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
   }
 
   // Stats calculation
@@ -297,7 +238,7 @@ export default function AutorDashboard() {
                     </span>
                   </td>
                   <td>
-                    {getStatusBadge(doc.status)}
+                    <StatusBadge status={doc.status} />
                   </td>
                   <td>
                     <div className="flex flex-wrap gap-1">

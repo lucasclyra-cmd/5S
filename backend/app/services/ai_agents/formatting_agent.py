@@ -73,32 +73,18 @@ async def restructure(
 def get_mock_restructure(text: str) -> dict:
     """Return a mock restructured document for testing."""
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    sections = []
 
-    if paragraphs:
-        sections.append({
-            "title": "Introduction",
-            "content": paragraphs[0] if paragraphs else "",
-            "level": 1,
-        })
-        if len(paragraphs) > 1:
-            sections.append({
-                "title": "Content",
-                "content": "\n\n".join(paragraphs[1:]),
-                "level": 1,
-            })
+    if not paragraphs:
+        sections = [{"title": "Content", "content": text, "level": 1}]
+    elif len(paragraphs) == 1:
+        sections = [{"title": "Introduction", "content": paragraphs[0], "level": 1}]
     else:
-        sections.append({
-            "title": "Content",
-            "content": text,
-            "level": 1,
-        })
+        sections = [
+            {"title": "Introduction", "content": paragraphs[0], "level": 1},
+            {"title": "Content", "content": "\n\n".join(paragraphs[1:]), "level": 1},
+        ]
 
     return {
         "sections": sections,
-        "metadata": {
-            "title": "Document",
-            "author": "Unknown",
-            "date": "Unknown",
-        },
+        "metadata": {"title": "Document", "author": "Unknown", "date": "Unknown"},
     }

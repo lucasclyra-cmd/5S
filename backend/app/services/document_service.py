@@ -15,6 +15,27 @@ from app.models.config import Tag, DocumentTag, Category
 from app.services.document_parser import extract_text
 
 
+async def _save_uploaded_file(file: UploadFile) -> tuple[str, str]:
+    """Save an uploaded file to storage and extract its text. Returns (file_path, extracted_text)."""
+    originals_dir = os.path.join(settings.STORAGE_PATH, "originals")
+    os.makedirs(originals_dir, exist_ok=True)
+
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".docx"
+    unique_filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(originals_dir, unique_filename)
+
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    try:
+        extracted_text = extract_text(file_path)
+    except Exception:
+        extracted_text = ""
+
+    return file_path, extracted_text
+
+
 async def upload_document(
     db: AsyncSession,
     file: UploadFile,
@@ -25,19 +46,7 @@ async def upload_document(
     profile: str,
 ) -> tuple[Document, DocumentVersion]:
     """Upload a document file and create/update the Document and DocumentVersion records."""
-    # Ensure storage directory exists
-    originals_dir = os.path.join(settings.STORAGE_PATH, "originals")
-    os.makedirs(originals_dir, exist_ok=True)
-
-    # Generate unique filename
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".docx"
-    unique_filename = f"{uuid.uuid4().hex}{ext}"
-    file_path = os.path.join(originals_dir, unique_filename)
-
-    # Save file
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    file_path, extracted_text = await _save_uploaded_file(file)
 
     # Check if document with this code already exists
     result = await db.execute(
@@ -77,12 +86,6 @@ async def upload_document(
         # Update tags if provided
         if tags is not None:
             await _sync_tags(db, document.id, tags)
-
-    # Extract text
-    try:
-        extracted_text = extract_text(file_path)
-    except Exception:
-        extracted_text = ""
 
     # Create version
     version = DocumentVersion(
@@ -216,23 +219,7 @@ async def resubmit_document(
             latest.status = "archived"
             latest.archived_at = datetime.now(timezone.utc)
 
-    # Save file
-    originals_dir = os.path.join(settings.STORAGE_PATH, "originals")
-    os.makedirs(originals_dir, exist_ok=True)
-
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".docx"
-    unique_filename = f"{uuid.uuid4().hex}{ext}"
-    file_path = os.path.join(originals_dir, unique_filename)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    # Extract text
-    try:
-        extracted_text = extract_text(file_path)
-    except Exception:
-        extracted_text = ""
+    file_path, extracted_text = await _save_uploaded_file(file)
 
     # Increment version
     document.current_version += 1

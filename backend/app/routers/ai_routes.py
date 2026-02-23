@@ -8,16 +8,7 @@ from app.services import ai_service, versioning_service
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
-@router.post("/analyze/{version_id}", response_model=AnalysisResponse)
-async def trigger_analysis(version_id: int, db: AsyncSession = Depends(get_db)):
-    """Trigger AI analysis on a document version."""
-    try:
-        analysis = await ai_service.run_analysis(db, version_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
-
+def _analysis_to_response(analysis) -> AnalysisResponse:
     return AnalysisResponse(
         id=analysis.id,
         version_id=analysis.version_id,
@@ -30,6 +21,19 @@ async def trigger_analysis(version_id: int, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.post("/analyze/{version_id}", response_model=AnalysisResponse)
+async def trigger_analysis(version_id: int, db: AsyncSession = Depends(get_db)):
+    """Trigger AI analysis on a document version."""
+    try:
+        analysis = await ai_service.run_analysis(db, version_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+    return _analysis_to_response(analysis)
+
+
 @router.get("/analysis/{version_id}", response_model=list[AnalysisResponse])
 async def get_analysis_results(version_id: int, db: AsyncSession = Depends(get_db)):
     """Get all AI analysis results for a document version."""
@@ -37,21 +41,7 @@ async def get_analysis_results(version_id: int, db: AsyncSession = Depends(get_d
     if version is None:
         raise HTTPException(status_code=404, detail=f"Version {version_id} not found")
 
-    results = []
-    for analysis in version.analyses:
-        results.append(
-            AnalysisResponse(
-                id=analysis.id,
-                version_id=analysis.version_id,
-                agent_type=analysis.agent_type,
-                feedback_items=[
-                    FeedbackItem(**item) for item in (analysis.feedback_items or [])
-                ],
-                approved=analysis.approved,
-                created_at=analysis.created_at,
-            )
-        )
-    return results
+    return [_analysis_to_response(a) for a in version.analyses]
 
 
 @router.post("/format/{version_id}")

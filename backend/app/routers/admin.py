@@ -129,7 +129,7 @@ async def delete_tag(tag_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "Tag deleted"}
 
 
-# ---- Templates (AdminConfig with config_type='template') ----
+# ---- AdminConfig CRUD (templates, rules, prompts) ----
 
 
 async def _get_configs_by_type(db: AsyncSession, config_type: str) -> list[AdminConfig]:
@@ -153,154 +153,113 @@ async def _get_config(db: AsyncSession, config_id: int, config_type: str) -> Adm
     return config
 
 
+async def _list_configs(db: AsyncSession, config_type: str) -> list[AdminConfigResponse]:
+    configs = await _get_configs_by_type(db, config_type)
+    return [AdminConfigResponse.model_validate(c) for c in configs]
+
+
+async def _create_config(
+    db: AsyncSession, config_type: str, body: AdminConfigCreate
+) -> AdminConfigResponse:
+    config = AdminConfig(
+        config_type=config_type,
+        category_id=body.category_id,
+        document_type=body.document_type,
+        config_data=body.config_data,
+    )
+    db.add(config)
+    await db.flush()
+    await db.refresh(config)
+    return AdminConfigResponse.model_validate(config)
+
+
+async def _update_config(
+    db: AsyncSession, config_id: int, config_type: str, body: AdminConfigUpdate
+) -> AdminConfigResponse:
+    config = await _get_config(db, config_id, config_type)
+    if body.category_id is not None:
+        config.category_id = body.category_id
+    if body.document_type is not None:
+        config.document_type = body.document_type
+    if body.config_data is not None:
+        config.config_data = body.config_data
+
+    await db.flush()
+    await db.refresh(config)
+    return AdminConfigResponse.model_validate(config)
+
+
+async def _delete_config(db: AsyncSession, config_id: int, config_type: str) -> dict:
+    config = await _get_config(db, config_id, config_type)
+    await db.delete(config)
+    await db.flush()
+    return {"message": f"{config_type.title()} deleted"}
+
+
+# ---- Templates ----
+
+
 @router.get("/templates", response_model=list[AdminConfigResponse])
 async def list_templates(db: AsyncSession = Depends(get_db)):
-    """List all template configurations."""
-    configs = await _get_configs_by_type(db, "template")
-    return [AdminConfigResponse.model_validate(c) for c in configs]
+    return await _list_configs(db, "template")
 
 
 @router.post("/templates", response_model=AdminConfigResponse, status_code=201)
 async def create_template(body: AdminConfigCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new template configuration."""
-    config = AdminConfig(
-        config_type="template",
-        category_id=body.category_id,
-        document_type=body.document_type,
-        config_data=body.config_data,
-    )
-    db.add(config)
-    await db.flush()
-    await db.refresh(config)
-    return AdminConfigResponse.model_validate(config)
+    return await _create_config(db, "template", body)
 
 
 @router.put("/templates/{config_id}", response_model=AdminConfigResponse)
-async def update_template(
-    config_id: int, body: AdminConfigUpdate, db: AsyncSession = Depends(get_db)
-):
-    """Update a template configuration."""
-    config = await _get_config(db, config_id, "template")
-    if body.category_id is not None:
-        config.category_id = body.category_id
-    if body.document_type is not None:
-        config.document_type = body.document_type
-    if body.config_data is not None:
-        config.config_data = body.config_data
-
-    await db.flush()
-    await db.refresh(config)
-    return AdminConfigResponse.model_validate(config)
+async def update_template(config_id: int, body: AdminConfigUpdate, db: AsyncSession = Depends(get_db)):
+    return await _update_config(db, config_id, "template", body)
 
 
 @router.delete("/templates/{config_id}")
 async def delete_template(config_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a template configuration."""
-    config = await _get_config(db, config_id, "template")
-    await db.delete(config)
-    await db.flush()
-    return {"message": "Template deleted"}
+    return await _delete_config(db, config_id, "template")
 
 
-# ---- Rules (AdminConfig with config_type='analysis_rules') ----
+# ---- Rules ----
 
 
 @router.get("/rules", response_model=list[AdminConfigResponse])
 async def list_rules(db: AsyncSession = Depends(get_db)):
-    """List all analysis rule configurations."""
-    configs = await _get_configs_by_type(db, "analysis_rules")
-    return [AdminConfigResponse.model_validate(c) for c in configs]
+    return await _list_configs(db, "analysis_rules")
 
 
 @router.post("/rules", response_model=AdminConfigResponse, status_code=201)
 async def create_rule(body: AdminConfigCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new analysis rule configuration."""
-    config = AdminConfig(
-        config_type="analysis_rules",
-        category_id=body.category_id,
-        document_type=body.document_type,
-        config_data=body.config_data,
-    )
-    db.add(config)
-    await db.flush()
-    await db.refresh(config)
-    return AdminConfigResponse.model_validate(config)
+    return await _create_config(db, "analysis_rules", body)
 
 
 @router.put("/rules/{config_id}", response_model=AdminConfigResponse)
-async def update_rule(
-    config_id: int, body: AdminConfigUpdate, db: AsyncSession = Depends(get_db)
-):
-    """Update an analysis rule configuration."""
-    config = await _get_config(db, config_id, "analysis_rules")
-    if body.category_id is not None:
-        config.category_id = body.category_id
-    if body.document_type is not None:
-        config.document_type = body.document_type
-    if body.config_data is not None:
-        config.config_data = body.config_data
-
-    await db.flush()
-    await db.refresh(config)
-    return AdminConfigResponse.model_validate(config)
+async def update_rule(config_id: int, body: AdminConfigUpdate, db: AsyncSession = Depends(get_db)):
+    return await _update_config(db, config_id, "analysis_rules", body)
 
 
 @router.delete("/rules/{config_id}")
 async def delete_rule(config_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete an analysis rule configuration."""
-    config = await _get_config(db, config_id, "analysis_rules")
-    await db.delete(config)
-    await db.flush()
-    return {"message": "Rule deleted"}
+    return await _delete_config(db, config_id, "analysis_rules")
 
 
-# ---- Prompts (AdminConfig with config_type='prompt') ----
+# ---- Prompts ----
 
 
 @router.get("/prompts", response_model=list[AdminConfigResponse])
 async def list_prompts(db: AsyncSession = Depends(get_db)):
-    """List all prompt configurations."""
-    configs = await _get_configs_by_type(db, "prompt")
-    return [AdminConfigResponse.model_validate(c) for c in configs]
+    return await _list_configs(db, "prompt")
 
 
 @router.post("/prompts", response_model=AdminConfigResponse, status_code=201)
 async def create_prompt(body: AdminConfigCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new prompt configuration."""
-    config = AdminConfig(
-        config_type="prompt",
-        category_id=body.category_id,
-        document_type=body.document_type,
-        config_data=body.config_data,
-    )
-    db.add(config)
-    await db.flush()
-    await db.refresh(config)
-    return AdminConfigResponse.model_validate(config)
+    return await _create_config(db, "prompt", body)
 
 
 @router.put("/prompts/{config_id}", response_model=AdminConfigResponse)
-async def update_prompt(
-    config_id: int, body: AdminConfigUpdate, db: AsyncSession = Depends(get_db)
-):
-    """Update a prompt configuration."""
-    config = await _get_config(db, config_id, "prompt")
-    if body.category_id is not None:
-        config.category_id = body.category_id
-    if body.document_type is not None:
-        config.document_type = body.document_type
-    if body.config_data is not None:
-        config.config_data = body.config_data
-
-    await db.flush()
-    await db.refresh(config)
-    return AdminConfigResponse.model_validate(config)
+async def update_prompt(config_id: int, body: AdminConfigUpdate, db: AsyncSession = Depends(get_db)):
+    return await _update_config(db, config_id, "prompt", body)
 
 
 @router.delete("/prompts/{config_id}")
 async def delete_prompt(config_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a prompt configuration."""
-    config = await _get_config(db, config_id, "prompt")
-    await db.delete(config)
-    await db.flush()
-    return {"message": "Prompt deleted"}
+    return await _delete_config(db, config_id, "prompt")

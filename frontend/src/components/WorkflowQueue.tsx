@@ -6,6 +6,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { WorkflowItem } from "@/types";
+import { formatDateTime } from "@/lib/format";
 
 interface WorkflowQueueProps {
   items: WorkflowItem[];
@@ -16,16 +17,6 @@ export default function WorkflowQueue({
   items,
   onItemClick,
 }: WorkflowQueueProps) {
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
   function getStatusLabel(action: string | null) {
     if (action === "approved") return "Aprovado";
     if (action === "rejected") return "Rejeitado";
@@ -88,7 +79,7 @@ export default function WorkflowQueue({
               </td>
               <td>
                 <span style={{ color: "var(--text-muted)" }}>
-                  {formatDate(item.created_at)}
+                  {formatDateTime(item.created_at)}
                 </span>
               </td>
               <td style={{ textAlign: "right" }}>

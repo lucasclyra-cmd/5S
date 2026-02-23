@@ -21,6 +21,17 @@ def get_openai_client() -> Optional[AsyncOpenAI]:
     return None
 
 
+async def _call_with_fallback(ai_call, mock_call) -> dict:
+    """Try calling an AI agent; fall back to mock if no client or on error."""
+    client = get_openai_client()
+    if client:
+        try:
+            return await ai_call(client)
+        except Exception:
+            return mock_call()
+    return mock_call()
+
+
 async def _get_version(db: AsyncSession, version_id: int) -> DocumentVersion:
     """Fetch a document version by ID."""
     result = await db.execute(
@@ -64,17 +75,10 @@ async def run_analysis(db: AsyncSession, version_id: int) -> AIAnalysis:
     # Get rules from admin config
     rules = await _get_admin_config(db, "analysis_rules", category_id)
 
-    client = get_openai_client()
-    if client:
-        try:
-            result = await analysis_agent.analyze(
-                client, text, rules=rules, document_type=None
-            )
-        except Exception as e:
-            result = analysis_agent.get_mock_analysis(text)
-            result["error"] = str(e)
-    else:
-        result = analysis_agent.get_mock_analysis(text)
+    result = await _call_with_fallback(
+        lambda client: analysis_agent.analyze(client, text, rules=rules, document_type=None),
+        lambda: analysis_agent.get_mock_analysis(text),
+    )
 
     # Save analysis
     analysis = AIAnalysis(
@@ -107,16 +111,12 @@ async def run_formatting(db: AsyncSession, version_id: int) -> DocumentVersion:
     # Get template config
     template_config = await _get_admin_config(db, "template", category_id)
 
-    client = get_openai_client()
-    if client:
-        try:
-            result = await formatting_agent.restructure(
-                client, text, template_config=template_config, document_type=None
-            )
-        except Exception:
-            result = formatting_agent.get_mock_restructure(text)
-    else:
-        result = formatting_agent.get_mock_restructure(text)
+    result = await _call_with_fallback(
+        lambda client: formatting_agent.restructure(
+            client, text, template_config=template_config, document_type=None
+        ),
+        lambda: formatting_agent.get_mock_restructure(text),
+    )
 
     # Save formatting analysis record
     format_analysis = AIAnalysis(
@@ -168,14 +168,10 @@ async def run_changelog(db: AsyncSession, version_id: int) -> Changelog:
             old_text = prev_version.extracted_text
             previous_version_id = prev_version.id
 
-    client = get_openai_client()
-    if client:
-        try:
-            result = await changelog_agent.generate_changelog(client, text, old_text)
-        except Exception:
-            result = changelog_agent.get_mock_changelog(text, old_text)
-    else:
-        result = changelog_agent.get_mock_changelog(text, old_text)
+    result = await _call_with_fallback(
+        lambda client: changelog_agent.generate_changelog(client, text, old_text),
+        lambda: changelog_agent.get_mock_changelog(text, old_text),
+    )
 
     # Save changelog
     cl = Changelog(

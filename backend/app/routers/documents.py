@@ -35,19 +35,7 @@ def _document_to_response(doc) -> DocumentResponse:
 
 def _version_to_response(ver) -> VersionResponse:
     """Convert a DocumentVersion model to a VersionResponse schema."""
-    return VersionResponse(
-        id=ver.id,
-        document_id=ver.document_id,
-        version_number=ver.version_number,
-        original_file_path=ver.original_file_path,
-        formatted_file_path_docx=ver.formatted_file_path_docx,
-        formatted_file_path_pdf=ver.formatted_file_path_pdf,
-        extracted_text=ver.extracted_text,
-        ai_approved=ver.ai_approved,
-        status=ver.status,
-        submitted_at=ver.submitted_at,
-        archived_at=ver.archived_at,
-    )
+    return VersionResponse.model_validate(ver)
 
 
 @router.post("/upload", response_model=DocumentUploadResponse)
@@ -124,17 +112,9 @@ async def get_document(code: str, db: AsyncSession = Depends(get_db)):
     if doc is None:
         raise HTTPException(status_code=404, detail=f"Document '{code}' not found")
 
+    resp = _document_to_response(doc)
     return DocumentDetailResponse(
-        id=doc.id,
-        code=doc.code,
-        title=doc.title,
-        category_id=doc.category_id,
-        current_version=doc.current_version,
-        status=doc.status,
-        created_by_profile=doc.created_by_profile,
-        created_at=doc.created_at,
-        updated_at=doc.updated_at,
-        tags=[tag.name for tag in doc.tags] if doc.tags else [],
+        **resp.model_dump(),
         versions=[_version_to_response(v) for v in doc.versions],
     )
 
