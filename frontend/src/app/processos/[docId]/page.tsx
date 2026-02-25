@@ -12,6 +12,7 @@ import {
   BookOpen,
   FileBarChart,
   ClipboardList,
+  FileDown,
 } from "lucide-react";
 import {
   getDocument,
@@ -22,6 +23,7 @@ import {
   getTextReviewHistory,
   publishDocument,
   getAuditReportUrl,
+  getExportUrl,
 } from "@/lib/api";
 import type {
   DocumentWithVersions,
@@ -337,6 +339,34 @@ export default function ProcessosReviewPage() {
           Relatório de Auditoria (PDF)
         </a>
       </div>
+
+      {/* Download buttons — PDF always available when formatted; DOCX only after publication */}
+      {(currentVersion?.formatted_file_path_pdf || (currentVersion?.formatted_file_path_docx && currentVersion?.status === "published")) && (
+        <div className="flex flex-wrap gap-3 mb-6">
+          {currentVersion?.formatted_file_path_pdf && (
+            <a
+              href={getExportUrl(currentVersion.id, "pdf")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-success"
+            >
+              <FileDown size={18} />
+              Baixar PDF
+            </a>
+          )}
+          {currentVersion?.formatted_file_path_docx && currentVersion?.status === "published" && (
+            <a
+              href={getExportUrl(currentVersion.id, "docx")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-success"
+            >
+              <FileDown size={18} />
+              Baixar DOCX
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Publish button — shown when document is approved */}
       {document.status === "approved" && !currentVersion?.published_at && (
