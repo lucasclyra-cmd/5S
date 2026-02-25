@@ -49,6 +49,7 @@ export default function ImportarPage() {
   const [error, setError] = useState<string | null>(null);
   const [excludedCodes, setExcludedCodes] = useState<Set<string>>(new Set());
   const [showErrors, setShowErrors] = useState(false);
+  const [retrying, setRetrying] = useState<Set<string>>(new Set());
 
   async function handleScan() {
     setPhase("scanning");
@@ -94,6 +95,32 @@ export default function ImportarPage() {
       }
       return next;
     });
+  }
+
+  async function handleRetryItem(code: string) {
+    setRetrying(prev => { const next = new Set(prev); next.add(code); return next; });
+    try {
+      // Exclude all codes except the one we want to retry
+      const allCodes = importResult?.results.map(r => r.code) || [];
+      const excludeAll = allCodes.filter(c => c !== code);
+      const result = await executeImport(excludeAll);
+      if (result && result.results) {
+        const updated = result.results.find((r: any) => r.code === code);
+        if (updated && importResult) {
+          setImportResult(prev => prev ? {
+            ...prev,
+            results: prev.results.map(r => r.code === code ? updated : r),
+            total_imported: prev.results.map(r => r.code === code ? updated : r).filter(r => r.status === "imported").length,
+            total_errors: prev.results.map(r => r.code === code ? updated : r).filter(r => r.status === "error").length,
+            total_skipped: prev.results.map(r => r.code === code ? updated : r).filter(r => r.status === "skipped").length,
+          } : prev);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao tentar novamente");
+    } finally {
+      setRetrying(prev => { const next = new Set(prev); next.delete(code); return next; });
+    }
   }
 
   const importableDocs = scanData?.grouped_documents.filter(
@@ -470,6 +497,20 @@ export default function ImportarPage() {
                       </td>
                       <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
                         {r.error_message || "—"}
+                        {r.status === "error" && (
+                          <button
+                            onClick={() => handleRetryItem(r.code)}
+                            disabled={retrying.has(r.code)}
+                            style={{
+                              padding: "3px 8px", fontSize: 11, marginLeft: 8,
+                              background: "none", border: "1px solid var(--border)",
+                              borderRadius: "var(--radius-sm)", cursor: "pointer",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            {retrying.has(r.code) ? "Tentando..." : "Tentar novamente"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

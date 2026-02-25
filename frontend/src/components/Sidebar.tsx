@@ -81,7 +81,7 @@ const navByProfile: Record<string, NavSection[]> = {
           icon: <ShieldCheck size={18} />,
         },
         {
-          label: "Categorias e Tags",
+          label: "Categorias",
           href: "/admin/categorias",
           icon: <FolderTree size={18} />,
         },

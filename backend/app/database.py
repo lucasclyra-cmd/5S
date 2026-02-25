@@ -4,12 +4,9 @@ from typing import AsyncGenerator
 
 from app.config import settings
 
-_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
-
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    **({} if _is_sqlite else {"pool_size": 20, "max_overflow": 10}),
 )
 
 async_session_factory = async_sessionmaker(

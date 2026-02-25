@@ -2,6 +2,7 @@ import os
 import shutil
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,19 +44,32 @@ async def upload_template(
         content = await file.read()
         f.write(content)
 
-    # Extract placeholders (convert .odt first if needed)
-    preview_path = file_path
+    # Convert .odt to .docx eagerly so formatting always has a native .docx
+    docx_file_path = file_path
     if ext == ".odt":
         try:
             temp_dir = os.path.join(settings.STORAGE_PATH, "temp")
-            preview_path = convert_odt_to_docx(file_path, temp_dir)
-        except Exception:
-            preview_path = None
+            os.makedirs(temp_dir, exist_ok=True)
+            converted = convert_odt_to_docx(file_path, temp_dir)
+            # Move converted file to templates dir
+            docx_name = safe_name.replace(".odt", ".docx")
+            docx_file_path = os.path.join(templates_dir, docx_name)
+            shutil.move(converted, docx_file_path)
+        except Exception as e:
+            # Clean up the uploaded file on failure
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(
+                400,
+                f"Falha ao converter .odt para .docx: {str(e)}. "
+                "Verifique se o arquivo está correto ou use .docx diretamente.",
+            )
 
+    # Extract placeholders from the .docx version
     section_mapping = None
-    if preview_path and os.path.exists(preview_path):
+    if os.path.exists(docx_file_path):
         try:
-            placeholders = find_placeholders(preview_path)
+            placeholders = find_placeholders(docx_file_path)
             section_mapping = {"placeholders": placeholders}
         except Exception:
             section_mapping = {"placeholders": []}
@@ -76,6 +90,7 @@ async def upload_template(
         description=description or None,
         document_type=document_type,
         template_file_path=file_path,
+        docx_file_path=docx_file_path,
         is_active=True,
         section_mapping=section_mapping,
     )
@@ -119,6 +134,34 @@ async def get_template(template_id: int, db: AsyncSession = Depends(get_db)):
     return template
 
 
+@router.get("/{template_id}/download")
+async def download_template(template_id: int, db: AsyncSession = Depends(get_db)):
+    """Download the original template file."""
+    result = await db.execute(
+        select(DocumentTemplate).where(DocumentTemplate.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(404, "Template não encontrado")
+
+    file_path = template.template_file_path
+    if not file_path or not os.path.isfile(file_path):
+        raise HTTPException(404, "Arquivo do template não encontrado no servidor")
+
+    filename = os.path.basename(file_path)
+    ext = os.path.splitext(filename)[1].lower()
+    media_types = {
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".odt": "application/vnd.oasis.opendocument.text",
+    }
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type=media_types.get(ext, "application/octet-stream"),
+    )
+
+
 @router.get("/{template_id}/preview")
 async def preview_template(template_id: int, db: AsyncSession = Depends(get_db)):
     """Get the placeholders found in a template."""
@@ -129,15 +172,15 @@ async def preview_template(template_id: int, db: AsyncSession = Depends(get_db))
     if not template:
         raise HTTPException(404, "Template não encontrado")
 
-    # Try to extract placeholders from the file
+    # Prefer pre-converted .docx for placeholder extraction
     placeholders = []
-    file_path = template.template_file_path
-    if file_path and os.path.exists(file_path):
+    docx_path = template.docx_file_path or template.template_file_path
+    if docx_path and os.path.exists(docx_path):
         try:
-            preview_path = file_path
-            if file_path.lower().endswith(".odt"):
+            preview_path = docx_path
+            if docx_path.lower().endswith(".odt"):
                 temp_dir = os.path.join(settings.STORAGE_PATH, "temp")
-                preview_path = convert_odt_to_docx(file_path, temp_dir)
+                preview_path = convert_odt_to_docx(docx_path, temp_dir)
             placeholders = find_placeholders(preview_path)
         except Exception:
             placeholders = template.section_mapping.get("placeholders", []) if template.section_mapping else []
@@ -154,14 +197,24 @@ async def preview_template(template_id: int, db: AsyncSession = Depends(get_db))
 
 @router.delete("/{template_id}")
 async def delete_template(template_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a template (soft-deactivate)."""
+    """Delete a template and clean up associated files."""
     result = await db.execute(
         select(DocumentTemplate).where(DocumentTemplate.id == template_id)
     )
     template = result.scalar_one_or_none()
     if not template:
-        raise HTTPException(404, "Template não encontrado")
+        raise HTTPException(status_code=404, detail="Template não encontrado")
 
-    template.is_active = False
+    # Remove files from disk
+    for path in [template.template_file_path, template.docx_file_path]:
+        if path:
+            abs_path = path if os.path.isabs(path) else os.path.join(settings.STORAGE_PATH, path)
+            if os.path.isfile(abs_path):
+                try:
+                    os.remove(abs_path)
+                except OSError:
+                    pass
+
+    await db.delete(template)
     await db.commit()
-    return {"message": "Template desativado com sucesso"}
+    return {"message": "Template excluído com sucesso"}

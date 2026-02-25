@@ -12,10 +12,12 @@ import {
   FileText,
   CheckCircle,
   XCircle,
+  Download,
 } from "lucide-react";
-import { getTemplates, getTemplatePlaceholders, deleteTemplate } from "@/lib/api";
+import { getTemplates, getTemplatePlaceholders, deleteTemplate, getTemplateDownloadUrl } from "@/lib/api";
 import type { DocumentTemplate, TemplatePlaceholderPreview } from "@/types";
 import TemplateUpload from "@/components/TemplateUpload";
+import { useToast } from "@/lib/toast-context";
 
 function formatDate(dateStr: string): string {
   try {
@@ -45,6 +47,7 @@ function typeLabel(type: string): string {
 }
 
 export default function TemplatesPage() {
+  const { showToast } = useToast();
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +78,7 @@ export default function TemplatesPage() {
     try {
       await deleteTemplate(id);
       setDeleteConfirmId(null);
+      showToast("Template excluído com sucesso.", "success");
       await loadData();
     } catch (err: any) {
       setError(err.message || "Erro ao excluir template");
@@ -99,6 +103,7 @@ export default function TemplatesPage() {
 
   function handleUploaded() {
     setShowUpload(false);
+    showToast("Template enviado com sucesso.", "success");
     loadData();
   }
 
@@ -339,6 +344,14 @@ export default function TemplatesPage() {
                       </div>
 
                       <div className="flex items-center gap-2 ml-4">
+                        <a
+                          href={getTemplateDownloadUrl(template.id)}
+                          download
+                          className="btn-action"
+                          title="Baixar template"
+                        >
+                          <Download size={18} />
+                        </a>
                         <button
                           onClick={() => handlePreview(template.id)}
                           className="btn-action"

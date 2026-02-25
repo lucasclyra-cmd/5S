@@ -20,6 +20,7 @@ interface Props {
   chain: ApprovalChainType;
   onUpdate: (chain: ApprovalChainType) => void;
   isProcessos?: boolean;
+  onError?: (message: string) => void;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -37,11 +38,12 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-export default function ApprovalChainView({ chain, onUpdate, isProcessos }: Props) {
+export default function ApprovalChainView({ chain, onUpdate, isProcessos, onError }: Props) {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [rejectComments, setRejectComments] = useState<Record<number, string>>({});
   const [showRejectForm, setShowRejectForm] = useState<number | null>(null);
   const [trainingLoading, setTrainingLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const approvedCount = chain.approvers.filter((a) => a.action === "approve").length;
   const rejectedCount = chain.approvers.filter((a) => a.action === "reject").length;
@@ -53,8 +55,10 @@ export default function ApprovalChainView({ chain, onUpdate, isProcessos }: Prop
     try {
       const updated = await recordApproverAction(chain.id, approverId, "approve");
       onUpdate(updated);
-    } catch {
-      // error handled by parent
+    } catch (err: any) {
+      const message = err?.message || "Erro ao registrar ação de aprovação";
+      setError(message);
+      if (onError) onError(message);
     } finally {
       setActionLoading(null);
     }
@@ -67,8 +71,10 @@ export default function ApprovalChainView({ chain, onUpdate, isProcessos }: Prop
     try {
       const updated = await recordApproverAction(chain.id, approverId, "reject", comments);
       onUpdate(updated);
-    } catch {
-      // error handled by parent
+    } catch (err: any) {
+      const message = err?.message || "Erro ao registrar ação de aprovação";
+      setError(message);
+      if (onError) onError(message);
     } finally {
       setActionLoading(null);
       setShowRejectForm(null);
@@ -80,8 +86,10 @@ export default function ApprovalChainView({ chain, onUpdate, isProcessos }: Prop
     try {
       const updated = await updateTrainingRequirement(chain.id, !chain.requires_training);
       onUpdate(updated);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      const message = err?.message || "Erro ao registrar ação de aprovação";
+      setError(message);
+      if (onError) onError(message);
     } finally {
       setTrainingLoading(false);
     }
@@ -141,6 +149,14 @@ export default function ApprovalChainView({ chain, onUpdate, isProcessos }: Prop
           ({totalRequired} obrigatório{totalRequired !== 1 ? "s" : ""})
         </span>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div style={{ background: "rgba(220,38,38,0.08)", border: "1px solid var(--danger)", borderRadius: "var(--radius-md)", padding: "12px 16px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "var(--danger)", fontSize: 13 }}>{error}</span>
+          <button onClick={() => setError(null)} style={{ color: "var(--danger)", background: "none", border: "none", cursor: "pointer" }}>&#10005;</button>
+        </div>
+      )}
 
       {/* Approvers list */}
       <div className="space-y-3">

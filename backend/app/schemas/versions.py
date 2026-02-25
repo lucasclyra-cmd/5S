@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 
 class VersionResponse(BaseModel):
@@ -15,5 +15,17 @@ class VersionResponse(BaseModel):
     status: str
     submitted_at: Optional[datetime] = None
     archived_at: Optional[datetime] = None
+    change_summary: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ChangelogResponse(BaseModel):
+    id: int
+    version_id: int
+    previous_version_id: Optional[int] = None
+    diff_content: Optional[dict[str, Any]] = None
+    summary: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

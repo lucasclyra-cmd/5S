@@ -2,11 +2,38 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RefreshCw, Shield, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, RefreshCw, Shield, Clock, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { getWorkflowQueue, getPendingApprovals } from "@/lib/api";
 import type { WorkflowItem, PendingApprovalItem } from "@/types";
 import WorkflowQueueComponent from "@/components/WorkflowQueue";
 import { formatDateTime } from "@/lib/format";
+
+function getUrgencyChip(createdAt: string): React.ReactNode {
+  const ageDays = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (ageDays >= 7) {
+    return (
+      <span style={{
+        display: "inline-flex", padding: "2px 7px", borderRadius: 100,
+        fontSize: 11, fontWeight: 600, marginLeft: 6,
+        background: "rgba(201,69,62,0.08)", color: "var(--danger)",
+      }}>
+        +7 dias
+      </span>
+    );
+  }
+  if (ageDays >= 3) {
+    return (
+      <span style={{
+        display: "inline-flex", padding: "2px 7px", borderRadius: 100,
+        fontSize: 11, fontWeight: 600, marginLeft: 6,
+        background: "rgba(230,168,23,0.10)", color: "var(--warning)",
+      }}>
+        +3 dias
+      </span>
+    );
+  }
+  return null;
+}
 
 export default function ProcessosDashboard() {
   const router = useRouter();
@@ -14,6 +41,7 @@ export default function ProcessosDashboard() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showResolved, setShowResolved] = useState(false);
 
   useEffect(() => {
     loadQueue();
@@ -180,6 +208,7 @@ export default function ProcessosDashboard() {
                     </td>
                     <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                       {formatDateTime(item.created_at)}
+                      {getUrgencyChip(item.created_at)}
                     </td>
                   </tr>
                 ))}
@@ -206,13 +235,24 @@ export default function ProcessosDashboard() {
 
           {resolvedItems.length > 0 && (
             <div className="mt-8">
-              <h2 style={{ color: "var(--text-primary)", marginBottom: 16 }}>
-                Documentos Resolvidos
-              </h2>
-              <WorkflowQueueComponent
-                items={resolvedItems}
-                onItemClick={handleItemClick}
-              />
+              <button
+                onClick={() => setShowResolved(v => !v)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  fontSize: 14, fontWeight: 600, color: "var(--text-secondary)",
+                  background: "none", border: "none", cursor: "pointer",
+                  marginBottom: 12,
+                }}
+              >
+                {showResolved ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                Documentos Resolvidos ({resolvedItems.length})
+              </button>
+              {showResolved && (
+                <WorkflowQueueComponent
+                  items={resolvedItems}
+                  onItemClick={handleItemClick}
+                />
+              )}
             </div>
           )}
 

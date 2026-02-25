@@ -4,50 +4,70 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Plus,
   Pencil,
-  Trash2,
   Loader2,
-  ShieldCheck,
+  List,
   Save,
   X,
+  Plus,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   getAdminConfigs,
   createAdminConfig,
   updateAdminConfig,
-  deleteAdminConfig,
-  getCategories,
 } from "@/lib/api";
-import type { AdminConfig, Category } from "@/types";
+import type { AdminConfig } from "@/types";
+import { useToast } from "@/lib/toast-context";
 
-interface RuleFormData {
-  name: string;
-  category_id: number | null;
-  document_type: string;
-  checklist: string[];
-  description: string;
+const DOC_TYPES = [
+  {
+    type: "PQ",
+    label: "PQ — Procedimento da Qualidade",
+    defaults: [
+      "Objetivo e Abrangência",
+      "Documentos Complementares",
+      "Definições",
+      "Descrição das Atividades",
+      "Responsabilidades",
+    ],
+  },
+  {
+    type: "IT",
+    label: "IT — Instrução de Trabalho",
+    defaults: [
+      "Objetivo e Abrangência",
+      "Documentos Complementares",
+      "Definições",
+      "Condições de Segurança",
+      "Características",
+      "Condições de Armazenamento",
+    ],
+  },
+  {
+    type: "RQ",
+    label: "RQ — Registro da Qualidade",
+    defaults: [],
+  },
+];
+
+interface SectionsState {
+  [docType: string]: {
+    configId: number | null;
+    sections: string[];
+  };
 }
 
-const defaultFormData: RuleFormData = {
-  name: "",
-  category_id: null,
-  document_type: "",
-  checklist: [],
-  description: "",
-};
-
 export default function RegrasPage() {
-  const [configs, setConfigs] = useState<AdminConfig[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { showToast } = useToast();
+  const [state, setState] = useState<SectionsState>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<RuleFormData>(defaultFormData);
+  const [editingType, setEditingType] = useState<string | null>(null);
+  const [editSections, setEditSections] = useState<string[]>([]);
+  const [newItem, setNewItem] = useState("");
   const [saving, setSaving] = useState(false);
-  const [checklistInput, setChecklistInput] = useState("");
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -57,113 +77,84 @@ export default function RegrasPage() {
     setLoading(true);
     setError(null);
     try {
-      const [configsData, catsData] = await Promise.all([
-        getAdminConfigs("analysis_rule"),
-        getCategories().catch(() => []),
-      ]);
-      setConfigs(Array.isArray(configsData) ? configsData : []);
-      setCategories(Array.isArray(catsData) ? catsData : []);
+      const configs = await getAdminConfigs("analysis_rule");
+      const configList = Array.isArray(configs) ? configs : [];
+
+      const newState: SectionsState = {};
+      for (const dt of DOC_TYPES) {
+        const config = configList.find((c: AdminConfig) => c.document_type === dt.type);
+        newState[dt.type] = {
+          configId: config?.id ?? null,
+          sections: config?.config_data?.sections ?? dt.defaults,
+        };
+      }
+      setState(newState);
     } catch (err: any) {
-      setError(err.message || "Erro ao carregar regras");
+      setError(err.message || "Erro ao carregar configurações");
     } finally {
       setLoading(false);
     }
   }
 
-  function openCreateForm() {
-    setFormData(defaultFormData);
-    setEditingId(null);
-    setShowForm(true);
+  function startEdit(docType: string) {
+    setEditingType(docType);
+    setEditSections([...(state[docType]?.sections || [])]);
+    setNewItem("");
   }
 
-  function openEditForm(config: AdminConfig) {
-    const cd = config.config_data || {};
-    setFormData({
-      name: cd.name || "",
-      category_id: config.category_id,
-      document_type: config.document_type || "",
-      checklist: cd.checklist || [],
-      description: cd.description || "",
-    });
-    setEditingId(config.id);
-    setShowForm(true);
+  function cancelEdit() {
+    setEditingType(null);
+    setEditSections([]);
+    setNewItem("");
   }
 
-  function closeForm() {
-    setShowForm(false);
-    setEditingId(null);
-    setFormData(defaultFormData);
-    setChecklistInput("");
-  }
-
-  function addChecklistItem() {
-    const trimmed = checklistInput.trim();
-    if (trimmed && !formData.checklist.includes(trimmed)) {
-      setFormData({
-        ...formData,
-        checklist: [...formData.checklist, trimmed],
-      });
+  function addSection() {
+    const trimmed = newItem.trim();
+    if (trimmed && !editSections.includes(trimmed)) {
+      setEditSections([...editSections, trimmed]);
     }
-    setChecklistInput("");
+    setNewItem("");
   }
 
-  function removeChecklistItem(item: string) {
-    setFormData({
-      ...formData,
-      checklist: formData.checklist.filter((c) => c !== item),
-    });
+  function removeSection(index: number) {
+    setEditSections(editSections.filter((_, i) => i !== index));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!formData.name.trim()) {
-      setError("O nome da regra é obrigatório.");
-      return;
-    }
+  function moveSection(index: number, direction: "up" | "down") {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= editSections.length) return;
+    const updated = [...editSections];
+    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
+    setEditSections(updated);
+  }
+
+  async function handleSave() {
+    if (!editingType) return;
     setSaving(true);
     setError(null);
 
+    const configId = state[editingType]?.configId;
     const payload = {
-      config_type: "analysis_rule",
-      category_id: formData.category_id || null,
-      document_type: formData.document_type || null,
-      config_data: {
-        name: formData.name,
-        description: formData.description,
-        checklist: formData.checklist,
-      },
+      config_type: "analysis_rules",
+      document_type: editingType,
+      category_id: null,
+      config_data: { sections: editSections },
     };
 
     try {
-      if (editingId) {
-        await updateAdminConfig(editingId, payload);
+      if (configId) {
+        await updateAdminConfig(configId, payload);
       } else {
         await createAdminConfig(payload);
       }
-      closeForm();
+      showToast("Regras salvas com sucesso.", "success");
+      cancelEdit();
       await loadData();
     } catch (err: any) {
-      setError(err.message || "Erro ao salvar regra");
+      setError(err.message || "Erro ao salvar");
     } finally {
       setSaving(false);
     }
-  }
-
-  async function handleDelete(id: number) {
-    setError(null);
-    try {
-      await deleteAdminConfig(id, "analysis_rules");
-      setDeleteConfirmId(null);
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || "Erro ao excluir regra");
-    }
-  }
-
-  function getCategoryName(id: number | null): string {
-    if (!id) return "Todas";
-    const cat = categories.find((c) => c.id === id);
-    return cat ? cat.name : `ID ${id}`;
   }
 
   return (
@@ -178,19 +169,13 @@ export default function RegrasPage() {
           <ArrowLeft size={16} />
           Voltar ao painel
         </Link>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 style={{ color: "var(--text-primary)" }}>
-              Regras de Análise
-            </h1>
-            <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
-              Defina checklists e critérios de verificação para a IA.
-            </p>
-          </div>
-          <button onClick={openCreateForm} className="btn-primary">
-            <Plus size={18} />
-            Nova Regra
-          </button>
+        <div>
+          <h1 style={{ color: "var(--text-primary)" }}>
+            Seções Obrigatórias
+          </h1>
+          <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 4 }}>
+            Configure as seções que cada tipo de documento deve conter.
+          </p>
         </div>
       </div>
 
@@ -209,182 +194,6 @@ export default function RegrasPage() {
         </div>
       )}
 
-      {/* Form */}
-      {showForm && (
-        <div className="card mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 style={{ color: "var(--text-primary)" }}>
-              {editingId ? "Editar Regra" : "Nova Regra"}
-            </h2>
-            <button
-              onClick={closeForm}
-              className="btn-action"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="label-field">Nome da Regra</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="Ex: Regra de Formatação Básica"
-                className="input-field"
-              />
-            </div>
-
-            <div>
-              <label className="label-field">Descrição</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Descreva o propósito desta regra..."
-                rows={3}
-                className="input-field resize-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Tipo de Documento</label>
-                <input
-                  type="text"
-                  value={formData.document_type}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      document_type: e.target.value,
-                    })
-                  }
-                  placeholder="Ex: procedimento, instrução"
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="label-field">Categoria</label>
-                <select
-                  value={formData.category_id ?? ""}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      category_id: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                  className="input-field"
-                >
-                  <option value="">Todas as categorias</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="label-field">
-                Itens do Checklist (critérios de verificação)
-              </label>
-              <div className="space-y-2 mb-3">
-                {formData.checklist.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 px-3 py-2"
-                    style={{
-                      borderRadius: "var(--radius-sm)",
-                      border: "1px solid var(--border)",
-                      background: "var(--bg-main)",
-                    }}
-                  >
-                    <span
-                      className="flex items-center justify-center shrink-0"
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: "50%",
-                        background: "var(--accent-light)",
-                        border: "1px solid var(--accent-border)",
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: "var(--accent)",
-                      }}
-                    >
-                      {index + 1}
-                    </span>
-                    <span className="flex-1" style={{ fontSize: 13, color: "var(--text-primary)" }}>
-                      {item}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeChecklistItem(item)}
-                      className="btn-action"
-                      style={{ width: 24, height: 24 }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={checklistInput}
-                  onChange={(e) => setChecklistInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addChecklistItem();
-                    }
-                  }}
-                  placeholder="Descreva um item de verificação..."
-                  className="input-field flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={addChecklistItem}
-                  className="btn-secondary"
-                  disabled={!checklistInput.trim()}
-                >
-                  Adicionar
-                </button>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-              <button
-                type="submit"
-                disabled={saving}
-                className="btn-primary"
-              >
-                {saving ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Save size={18} />
-                )}
-                {editingId ? "Atualizar" : "Criar"} Regra
-              </button>
-              <button
-                type="button"
-                onClick={closeForm}
-                className="btn-secondary"
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
@@ -392,118 +201,195 @@ export default function RegrasPage() {
         </div>
       )}
 
-      {/* Rules list */}
-      {!loading && configs.length === 0 && !showForm && (
-        <div className="card text-center py-16">
-          <ShieldCheck size={48} className="mx-auto mb-4" style={{ color: "var(--text-muted)" }} />
-          <h3 style={{ fontSize: 18, fontWeight: 500, color: "var(--text-primary)" }}>
-            Nenhuma regra configurada
-          </h3>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, marginBottom: 24 }}>
-            Crie sua primeira regra de análise.
-          </p>
-          <button onClick={openCreateForm} className="btn-primary">
-            <Plus size={18} />
-            Criar Regra
-          </button>
-        </div>
-      )}
+      {/* Document type cards */}
+      {!loading && (
+        <div className="space-y-6">
+          {DOC_TYPES.map((dt) => {
+            const data = state[dt.type];
+            const isEditing = editingType === dt.type;
+            const sections = data?.sections || dt.defaults;
 
-      {!loading && configs.length > 0 && (
-        <div className="space-y-4">
-          {configs.map((config) => {
-            const cd = config.config_data || {};
             return (
-              <div key={config.id} className="card">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <ShieldCheck size={20} style={{ color: "var(--accent)" }} />
+              <div key={dt.type} className="card">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <List size={20} style={{ color: "var(--accent)" }} />
+                    <div>
                       <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
-                        {cd.name || "Regra sem nome"}
+                        {dt.label}
                       </h3>
-                      {config.document_type && (
-                        <span className="badge-info">
-                          {config.document_type}
-                        </span>
-                      )}
-                      <span className="badge-neutral">
-                        {getCategoryName(config.category_id)}
-                      </span>
-                    </div>
-                    {cd.description && (
-                      <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-                        {cd.description}
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                        {sections.length} {sections.length === 1 ? "seção" : "seções"} configuradas
+                        {!data?.configId && (
+                          <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}> (padrão)</span>
+                        )}
                       </p>
-                    )}
-                    {cd.checklist && cd.checklist.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="section-title" style={{ marginBottom: 4 }}>
-                          Checklist ({cd.checklist.length} itens)
-                        </p>
-                        {cd.checklist.map((item: string, i: number) => (
-                          <div
-                            key={i}
-                            className="flex items-start gap-2"
-                            style={{ fontSize: 13, color: "var(--text-secondary)" }}
-                          >
-                            <span
-                              className="flex shrink-0 items-center justify-center mt-0.5"
-                              style={{
-                                width: 20,
-                                height: 20,
-                                borderRadius: "50%",
-                                background: "var(--bg-main)",
-                                border: "1px solid var(--border)",
-                                fontSize: 10,
-                                fontWeight: 500,
-                                color: "var(--text-muted)",
-                              }}
-                            >
-                              {i + 1}
-                            </span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
+                  {!isEditing && (
                     <button
-                      onClick={() => openEditForm(config)}
+                      onClick={() => startEdit(dt.type)}
                       className="btn-action"
                       title="Editar"
                     >
                       <Pencil size={18} />
                     </button>
-                    {deleteConfirmId === config.id ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleDelete(config.id)}
-                          className="btn-danger"
-                          style={{ padding: "6px 12px", fontSize: 12 }}
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(null)}
-                          className="btn-ghost"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
+                  )}
+                </div>
+
+                {/* View mode */}
+                {!isEditing && (
+                  <div className="space-y-1.5">
+                    {sections.length === 0 ? (
+                      <p style={{ fontSize: 13, color: "var(--text-muted)", fontStyle: "italic" }}>
+                        Sem seções definidas — mantém estrutura original do documento.
+                      </p>
                     ) : (
-                      <button
-                        onClick={() => setDeleteConfirmId(config.id)}
-                        className="btn-action"
-                        title="Excluir"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      sections.map((section, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 px-3 py-2"
+                          style={{
+                            borderRadius: "var(--radius-sm)",
+                            background: "var(--bg-main)",
+                            border: "1px solid var(--border)",
+                          }}
+                        >
+                          <span
+                            className="flex items-center justify-center shrink-0"
+                            style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: "50%",
+                              background: "var(--accent-light)",
+                              border: "1px solid var(--accent-border)",
+                              fontSize: 11,
+                              fontWeight: 500,
+                              color: "var(--accent)",
+                            }}
+                          >
+                            {i + 1}
+                          </span>
+                          <span style={{ fontSize: 13, color: "var(--text-primary)" }}>
+                            {section}
+                          </span>
+                        </div>
+                      ))
                     )}
                   </div>
-                </div>
+                )}
+
+                {/* Edit mode */}
+                {isEditing && (
+                  <div>
+                    <div className="space-y-2 mb-4">
+                      {editSections.map((section, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 px-3 py-2"
+                          style={{
+                            borderRadius: "var(--radius-sm)",
+                            border: "1px solid var(--accent-border)",
+                            background: "var(--bg-main)",
+                          }}
+                        >
+                          <span
+                            className="flex items-center justify-center shrink-0"
+                            style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: "50%",
+                              background: "var(--accent-light)",
+                              border: "1px solid var(--accent-border)",
+                              fontSize: 11,
+                              fontWeight: 500,
+                              color: "var(--accent)",
+                            }}
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="flex-1" style={{ fontSize: 13, color: "var(--text-primary)" }}>
+                            {section}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => moveSection(i, "up")}
+                              disabled={i === 0}
+                              className="btn-action"
+                              style={{ opacity: i === 0 ? 0.3 : 1 }}
+                              title="Mover para cima"
+                            >
+                              <ChevronUp size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveSection(i, "down")}
+                              disabled={i === editSections.length - 1}
+                              className="btn-action"
+                              style={{ opacity: i === editSections.length - 1 ? 0.3 : 1 }}
+                              title="Mover para baixo"
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeSection(i)}
+                              className="btn-action"
+                              style={{ color: "var(--danger)" }}
+                              title="Remover"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={newItem}
+                        onChange={(e) => setNewItem(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addSection();
+                          }
+                        }}
+                        placeholder="Nome da seção..."
+                        className="input-field flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={addSection}
+                        className="btn-secondary"
+                        disabled={!newItem.trim()}
+                      >
+                        <Plus size={16} />
+                        Adicionar
+                      </button>
+                    </div>
+
+                    <div className="flex gap-3 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="btn-primary"
+                      >
+                        {saving ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <Save size={18} />
+                        )}
+                        Salvar
+                      </button>
+                      <button onClick={cancelEdit} className="btn-secondary">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

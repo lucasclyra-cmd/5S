@@ -8,6 +8,33 @@ import {
 import type { WorkflowItem } from "@/types";
 import { formatDateTime } from "@/lib/format";
 
+function getUrgencyChip(createdAt: string): React.ReactNode {
+  const ageDays = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (ageDays >= 7) {
+    return (
+      <span style={{
+        display: "inline-flex", padding: "2px 7px", borderRadius: 100,
+        fontSize: 11, fontWeight: 600, marginLeft: 6,
+        background: "rgba(201,69,62,0.08)", color: "var(--danger)",
+      }}>
+        +7 dias
+      </span>
+    );
+  }
+  if (ageDays >= 3) {
+    return (
+      <span style={{
+        display: "inline-flex", padding: "2px 7px", borderRadius: 100,
+        fontSize: 11, fontWeight: 600, marginLeft: 6,
+        background: "rgba(230,168,23,0.10)", color: "var(--warning)",
+      }}>
+        +3 dias
+      </span>
+    );
+  }
+  return null;
+}
+
 interface WorkflowQueueProps {
   items: WorkflowItem[];
   onItemClick: (item: WorkflowItem) => void;
@@ -24,9 +51,9 @@ export default function WorkflowQueue({
   }
 
   function getStatusBadgeClass(action: string | null) {
-    if (action === "approved") return "badge-success";
-    if (action === "rejected") return "badge-danger";
-    return "badge-warning";
+    if (action === "approved") return "badge badge-success";
+    if (action === "rejected") return "badge badge-danger";
+    return "badge badge-warning";
   }
 
   if (items.length === 0) {
@@ -81,6 +108,7 @@ export default function WorkflowQueue({
                 <span style={{ color: "var(--text-muted)" }}>
                   {formatDateTime(item.created_at)}
                 </span>
+                {!item.resolved_at && getUrgencyChip(item.created_at)}
               </td>
               <td style={{ textAlign: "right" }}>
                 <button

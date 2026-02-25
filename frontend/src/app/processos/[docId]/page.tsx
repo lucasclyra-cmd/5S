@@ -35,7 +35,7 @@ import type {
 } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
-import AIFeedback from "@/components/AIFeedback";
+import UnifiedAnalysisPanel from "@/components/UnifiedAnalysisPanel";
 import ChangelogViewer from "@/components/ChangelogViewer";
 import DocumentPreview from "@/components/DocumentPreview";
 import ApprovalChainView from "@/components/ApprovalChain";
@@ -460,61 +460,15 @@ export default function ProcessosReviewPage() {
         </div>
       )}
 
-      {/* AI Analysis */}
-      {analysis && (
+      {/* Unified AI Analysis Panel */}
+      {(analysis || textReviewHistory.length > 0) && (
         <div className="mb-6">
-          <AIFeedback analysis={analysis} />
-        </div>
-      )}
-
-      {/* Text Review History */}
-      {textReviewHistory.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>
-            Histórico de Revisão Textual
-          </h3>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-            Revisões ortográficas e de clareza realizadas antes da aprovação.
-          </p>
-          {textReviewHistory.map((rev, idx) => (
-            <div
-              key={rev.id || idx}
-              style={{
-                padding: "10px 14px",
-                marginBottom: 8,
-                borderRadius: "var(--radius-sm)",
-                border: "1px solid var(--border)",
-                background: "var(--bg-main)",
-                fontSize: 13,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>
-                  Iteração {rev.iteration}
-                </span>
-                <span style={{
-                  padding: "2px 8px",
-                  borderRadius: "var(--radius-sm)",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: rev.status === "clean" ? "rgba(34,197,94,0.1)" : "rgba(59,130,246,0.1)",
-                  color: rev.status === "clean" ? "var(--success)" : "var(--accent)",
-                }}>
-                  {rev.status === "clean" ? "Sem erros" : rev.status === "user_accepted" ? "Aceito pelo autor" : rev.status === "user_edited" ? "Editado pelo autor" : rev.status}
-                </span>
-              </div>
-              {rev.spelling_errors && rev.spelling_errors.length > 0 && (
-                <p style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                  {rev.spelling_errors.length} erro(s) ortográfico(s) encontrado(s)
-                </p>
-              )}
-              {rev.clarity_suggestions && rev.clarity_suggestions.length > 0 && (
-                <p style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                  {rev.clarity_suggestions.length} sugestão(ões) de clareza
-                </p>
-              )}
-            </div>
-          ))}
+          <UnifiedAnalysisPanel
+            analysis={analysis}
+            textReview={textReviewHistory.length > 0 ? textReviewHistory[textReviewHistory.length - 1] : null}
+            textReviewHistory={textReviewHistory}
+            mode="processos"
+          />
         </div>
       )}
 

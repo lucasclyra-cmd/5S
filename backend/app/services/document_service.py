@@ -16,6 +16,21 @@ from app.services.document_parser import extract_text
 from app.services import coding_service
 
 
+def _to_relative_path(absolute_path: str) -> str:
+    """Store paths relative to STORAGE_PATH for portability."""
+    try:
+        return os.path.relpath(absolute_path, settings.STORAGE_PATH)
+    except ValueError:
+        return absolute_path
+
+
+def resolve_storage_path(relative_path: str) -> str:
+    """Resolve a stored relative path back to absolute."""
+    if os.path.isabs(relative_path):
+        return relative_path  # backward compat with existing absolute paths
+    return os.path.join(settings.STORAGE_PATH, relative_path)
+
+
 async def _save_uploaded_file(file: UploadFile) -> tuple[str, str]:
     """Save an uploaded file to storage and extract its text. Returns (file_path, extracted_text)."""
     originals_dir = os.path.join(settings.STORAGE_PATH, "originals")
@@ -34,7 +49,7 @@ async def _save_uploaded_file(file: UploadFile) -> tuple[str, str]:
     except Exception:
         extracted_text = ""
 
-    return file_path, extracted_text
+    return _to_relative_path(file_path), extracted_text
 
 
 async def upload_document(
@@ -82,6 +97,7 @@ async def upload_document(
         extracted_text=extracted_text,
         status="draft",
         submitted_at=datetime.now(timezone.utc),
+        change_summary="Versão inicial do documento",
     )
     db.add(version)
     await db.flush()
@@ -191,11 +207,20 @@ async def resubmit_document(
     code: str,
     file: UploadFile,
     profile: str,
+    change_summary: Optional[str] = None,
 ) -> tuple[Document, DocumentVersion]:
     """Create a new version for an existing document, auto-incrementing revision."""
     document = await get_document_by_code(db, code)
     if document is None:
         raise ValueError(f"Document with code '{code}' not found")
+
+    BLOCKED_RESUBMIT_STATUSES = {"analyzing", "formatting", "in_review", "active"}
+
+    if document.status in BLOCKED_RESUBMIT_STATUSES:
+        raise ValueError(
+            f"Não é possível reenviar o documento com status '{document.status}'. "
+            "O documento precisa estar com status 'rejected', 'draft' ou 'approved' para ser reenviado."
+        )
 
     # Archive the current latest version if it exists
     if document.versions:
@@ -226,6 +251,8 @@ async def resubmit_document(
         status="draft",
         submitted_at=datetime.now(timezone.utc),
     )
+    if change_summary:
+        version.change_summary = change_summary
     db.add(version)
     await db.flush()
 

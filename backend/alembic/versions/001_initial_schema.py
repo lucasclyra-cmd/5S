@@ -18,9 +18,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Enable pg_trgm extension for full-text search
-    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-
     # Categories table
     op.create_table(
         "categories",
@@ -151,26 +148,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
-    # Create indexes for full-text search with pg_trgm
-    op.create_index(
-        "idx_documents_code_trgm",
-        "documents",
-        ["code"],
-        postgresql_using="gin",
-        postgresql_ops={"code": "gin_trgm_ops"},
-    )
-    op.create_index(
-        "idx_documents_title_trgm",
-        "documents",
-        ["title"],
-        postgresql_using="gin",
-        postgresql_ops={"title": "gin_trgm_ops"},
-    )
 
 
 def downgrade() -> None:
-    op.drop_index("idx_documents_title_trgm", table_name="documents")
-    op.drop_index("idx_documents_code_trgm", table_name="documents")
     op.drop_table("admin_configs")
     op.drop_table("workflow_queue")
     op.drop_table("changelogs")
@@ -180,4 +160,3 @@ def downgrade() -> None:
     op.drop_table("documents")
     op.drop_table("tags")
     op.drop_table("categories")
-    op.execute("DROP EXTENSION IF EXISTS pg_trgm")

@@ -1,10 +1,11 @@
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.services.ai_service import run_analysis_background
 from app.schemas.documents import (
     DocumentDetailResponse,
     DocumentListResponse,
@@ -45,11 +46,15 @@ def _version_to_response(ver) -> VersionResponse:
 
 @router.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     metadata: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a new document with auto-generated standardized code."""
+    """Upload a new document with auto-generated standardized code.
+
+    AI analysis is triggered automatically as a background task.
+    """
     try:
         meta = json.loads(metadata)
     except json.JSONDecodeError:
@@ -83,6 +88,14 @@ async def upload_document(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Set status to "analyzing" so the response immediately reflects the state
+    doc.status = "analyzing"
+    version.status = "analyzing"
+    await db.flush()
+
+    # Schedule background AI analysis
+    background_tasks.add_task(run_analysis_background, version.id)
 
     return DocumentUploadResponse(
         document=_document_to_response(doc),
@@ -176,12 +189,16 @@ async def get_document_version(
 @router.post("/{code}/resubmit", response_model=DocumentUploadResponse)
 async def resubmit_document(
     code: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     created_by_profile: str = Form("autor"),
     change_summary: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
-    """Resubmit a document with a new file, creating a new version."""
+    """Resubmit a document with a new file, creating a new version.
+
+    AI analysis is triggered automatically as a background task.
+    """
     try:
         doc, version = await document_service.resubmit_document(
             db, code, file, created_by_profile, change_summary or None
@@ -190,6 +207,14 @@ async def resubmit_document(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Set status to "analyzing" so the response immediately reflects the state
+    doc.status = "analyzing"
+    version.status = "analyzing"
+    await db.flush()
+
+    # Schedule background AI analysis
+    background_tasks.add_task(run_analysis_background, version.id)
 
     return DocumentUploadResponse(
         document=_document_to_response(doc),

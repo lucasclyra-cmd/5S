@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.approval import ApprovalChain
 from app.models.version import DocumentVersion
 from app.models.workflow import WorkflowQueue
 from app.services import master_list_service
@@ -54,6 +55,20 @@ async def get_queue(db: AsyncSession) -> list[dict]:
 
 async def approve_document(db: AsyncSession, version_id: int) -> WorkflowQueue:
     """Approve a document version in the workflow."""
+    # Guard: check if an active approval chain exists
+    chain_result = await db.execute(
+        select(ApprovalChain).where(
+            ApprovalChain.version_id == version_id,
+            ApprovalChain.status == "pending",
+        )
+    )
+    active_chain = chain_result.scalar_one_or_none()
+    if active_chain is not None:
+        raise ValueError(
+            "Existe uma cadeia de aprovação ativa para esta versão. "
+            "Use a cadeia de aprovação para registrar aprovações."
+        )
+
     # Find the pending workflow item for this version
     result = await db.execute(
         select(WorkflowQueue).where(
@@ -107,6 +122,20 @@ async def reject_document(
     db: AsyncSession, version_id: int, comments: Optional[str] = None
 ) -> WorkflowQueue:
     """Reject a document version in the workflow."""
+    # Guard: check if an active approval chain exists
+    chain_result = await db.execute(
+        select(ApprovalChain).where(
+            ApprovalChain.version_id == version_id,
+            ApprovalChain.status == "pending",
+        )
+    )
+    active_chain = chain_result.scalar_one_or_none()
+    if active_chain is not None:
+        raise ValueError(
+            "Existe uma cadeia de aprovação ativa para esta versão. "
+            "Use a cadeia de aprovação para registrar aprovações."
+        )
+
     result = await db.execute(
         select(WorkflowQueue).where(
             WorkflowQueue.version_id == version_id,

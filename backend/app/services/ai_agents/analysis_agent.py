@@ -7,9 +7,8 @@ BASE_PROMPT = """Você é um analista de conformidade documental para um sistema
 
 Analise o documento a seguir nos seguintes critérios:
 1. **Completude** — Possui todas as seções e conteúdos obrigatórios?
-2. **Clareza** — A linguagem é clara, profissional e sem ambiguidades?
-3. **Conformidade** — Segue as normas e padrões corporativos?
-4. **Formatação** — A estrutura é lógica e bem organizada?
+2. **Conformidade** — Segue as normas e padrões corporativos?
+3. **Formatação** — A estrutura é lógica e bem organizada?
 
 Retorne sua análise como um objeto JSON com a seguinte estrutura:
 {
@@ -32,6 +31,37 @@ REGRAS IMPORTANTES:
 Apenas retorne o JSON, sem texto adicional."""
 
 
+TYPE_SPECIFIC_PROMPTS = {
+    "PQ": """
+Tipo de documento: Procedimento da Qualidade (PQ)
+Critérios adicionais para PQ:
+- DEVE ter seção de Objetivo e Abrangência claramente definido
+- DEVE listar Documentos Complementares com códigos corporativos
+- DEVE ter seção de Definições e Siglas
+- DEVE ter Descrição das Atividades detalhada (seção mais importante - rejeite se vazia)
+- DEVE ter Responsabilidades definidas por cargo/setor
+- Verificar se referências cruzadas a outros PQs ou ITs são consistentes
+""",
+    "IT": """
+Tipo de documento: Instrução de Trabalho (IT)
+Critérios adicionais para IT:
+- DEVE ter Objetivo operacional específico
+- Condições de Segurança (EPIs, riscos): OBRIGATÓRIO apenas para ITs de processos produtivos, operacionais ou que envolvam equipamentos, máquinas, substâncias químicas ou riscos físicos. Para ITs administrativas, financeiras, de TI ou de escritório, esta seção é OPCIONAL — NÃO rejeite por ausência.
+- DEVE ter passos numerados e sequenciais
+- DEVE ter Características do processo/produto
+- DEVE indicar Condições de Armazenamento se aplicável
+""",
+    "RQ": """
+Tipo de documento: Registro da Qualidade (RQ)
+Critérios adicionais para RQ:
+- Deve ter campos de preenchimento identificados
+- NÃO aplique critérios de narrativa (objetivo, definições, etc.)
+- Verifique se o formulário está completo e funcional
+- Verifique se há campos obrigatórios claramente marcados
+""",
+}
+
+
 async def analyze(
     client: AsyncOpenAI,
     text: str,
@@ -45,8 +75,10 @@ async def analyze(
         rules_text = json.dumps(rules, indent=2)
         prompt_parts.append(f"\nAdditional analysis rules to apply:\n{rules_text}")
 
-    if document_type:
-        prompt_parts.append(f"\nDocument type: {document_type}")
+    if document_type and document_type in TYPE_SPECIFIC_PROMPTS:
+        prompt_parts.append(TYPE_SPECIFIC_PROMPTS[document_type])
+    elif document_type:
+        prompt_parts.append(f"\nTipo de documento: {document_type}")
 
     system_prompt = "\n".join(prompt_parts)
 
@@ -79,17 +111,12 @@ def get_mock_analysis(text: str) -> dict:
     has_content = len(text.strip()) > 100
     feedback_items = [
         {
-            "item": "Document has content",
+            "item": "Conteúdo do documento",
             "status": "approved" if has_content else "rejected",
-            "suggestion": None if has_content else "Document appears to be empty or too short.",
+            "suggestion": None if has_content else "O documento parece estar vazio ou muito curto.",
         },
         {
-            "item": "Document structure",
-            "status": "approved",
-            "suggestion": None,
-        },
-        {
-            "item": "Language clarity",
+            "item": "Estrutura do documento",
             "status": "approved",
             "suggestion": None,
         },

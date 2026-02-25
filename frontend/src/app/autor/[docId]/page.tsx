@@ -21,7 +21,6 @@ import {
 import {
   getDocument,
   getAnalysis,
-  analyzeDocument,
   formatDocument,
   skipAiApproval,
   resubmitDocument,
@@ -43,13 +42,12 @@ import type {
 } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
-import AIFeedback from "@/components/AIFeedback";
+import UnifiedAnalysisPanel from "@/components/UnifiedAnalysisPanel";
 import ChangelogViewer from "@/components/ChangelogViewer";
 import DocumentPreview from "@/components/DocumentPreview";
 import DocumentUpload from "@/components/DocumentUpload";
 import ApproverSelector from "@/components/ApproverSelector";
 import ApprovalChainView from "@/components/ApprovalChain";
-import TextReviewPanel from "@/components/TextReviewPanel";
 import { useToast } from "@/lib/toast-context";
 
 export default function DocumentDetail() {
@@ -75,11 +73,9 @@ export default function DocumentDetail() {
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [textReview, setTextReview] = useState<TextReview | null>(null);
   const [textReviewLoading, setTextReviewLoading] = useState(false);
-  const autoAnalysisTriggered = useRef(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    autoAnalysisTriggered.current = false;
     loadDocument();
   }, [docCode]);
 
@@ -158,25 +154,9 @@ export default function DocumentDetail() {
     }
   }
 
-  // Auto-trigger AI analysis when document is in draft status
-  useEffect(() => {
-    if (
-      document &&
-      document.status === "draft" &&
-      !autoAnalysisTriggered.current &&
-      actionLoading === null
-    ) {
-      const version = document.versions?.[document.versions.length - 1];
-      if (version && version.status === "draft") {
-        autoAnalysisTriggered.current = true;
-        handleAnalyze();
-      }
-    }
-  }, [document]);
-
   // Auto-polling for documents in processing states
   useEffect(() => {
-    const processingStatuses = ["draft", "analyzing", "spelling_review", "formatting"];
+    const processingStatuses = ["analyzing", "spelling_review", "formatting"];
     if (document && processingStatuses.includes(document.status)) {
       pollingRef.current = setInterval(() => {
         loadDocumentOnly();
@@ -190,22 +170,6 @@ export default function DocumentDetail() {
   function getCurrentVersion(): DocumentVersion | null {
     if (!document?.versions || document.versions.length === 0) return null;
     return document.versions[document.versions.length - 1];
-  }
-
-  async function handleAnalyze() {
-    const version = getCurrentVersion();
-    if (!version) return;
-    setActionLoading("analyze");
-    try {
-      const anal = await analyzeDocument(version.id);
-      setAnalysis(anal);
-      showToast("Análise de IA concluída.", "success");
-      await loadDocument();
-    } catch (err: any) {
-      setError(err.message || "Erro ao analisar documento");
-    } finally {
-      setActionLoading(null);
-    }
   }
 
   async function handleFormat() {
@@ -244,7 +208,6 @@ export default function DocumentDetail() {
       setResubmitFile(null);
       setChangeSummary("");
       setShowResubmit(false);
-      autoAnalysisTriggered.current = false;
       showToast("Nova versão enviada com sucesso.", "success");
       // Redirect to new document code (revision number changes the code)
       if (result.document.code !== docCode) {
@@ -334,8 +297,6 @@ export default function DocumentDetail() {
   const isApproved =
     (document.status === "approved" || analysis?.approved === true) &&
     !isSpellingReview;
-  const isPendingAnalysis = document.status === "pending_analysis";
-  const isDraft = document.status === "draft";
   const midProcessingStatuses = ["draft", "analyzing", "spelling_review", "pending_analysis", "formatting", "active", "in_review"];
   const canUpdate = !midProcessingStatuses.includes(document.status);
 
@@ -432,19 +393,18 @@ export default function DocumentDetail() {
       <div className="card mb-6">
         <h3 className="section-title">Ações</h3>
         <div className="flex flex-wrap gap-3">
-          {(isPendingAnalysis || isDraft) && (
-            <button
-              onClick={handleAnalyze}
-              disabled={actionLoading !== null}
-              className="btn-primary"
-            >
-              {actionLoading === "analyze" ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <RefreshCw size={18} />
-              )}
-              Executar Análise IA
-            </button>
+          {(document.status === "analyzing" || document.status === "draft") && (
+            <div className="flex items-center gap-2" style={{
+              padding: "10px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "rgba(59, 130, 246, 0.06)",
+              border: "1px solid rgba(59, 130, 246, 0.15)",
+              fontSize: 13.5,
+              color: "var(--text-secondary)",
+            }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+              <span>A análise de IA está sendo executada automaticamente. Aguarde...</span>
+            </div>
           )}
 
           {isRejected && (
@@ -670,33 +630,22 @@ export default function DocumentDetail() {
           </div>
         )}
 
-      {/* AI Analysis */}
-      {loadingAnalysis && (
+      {/* Unified AI Analysis Panel */}
+      {(loadingAnalysis || loadingReview) && (
         <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
           <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
           <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando análise da IA...</span>
         </div>
       )}
-      {!loadingAnalysis && analysis && (
+      {!loadingAnalysis && !loadingReview && (analysis || textReview) && (
         <div className="mb-6">
-          <AIFeedback analysis={analysis} />
-        </div>
-      )}
-
-      {/* Text Review Panel — spelling/clarity loop */}
-      {loadingReview && (
-        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
-          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando revisão de texto...</span>
-        </div>
-      )}
-      {!loadingReview && textReview && textReview.status !== "clean" && (
-        <div className="mb-6">
-          <TextReviewPanel
-            review={textReview}
+          <UnifiedAnalysisPanel
+            analysis={analysis}
+            textReview={textReview}
             onSubmitText={handleSubmitTextReview}
             onAccept={handleAcceptTextReview}
-            loading={textReviewLoading}
+            textReviewLoading={textReviewLoading}
+            mode="autor"
           />
         </div>
       )}

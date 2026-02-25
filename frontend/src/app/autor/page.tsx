@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -23,16 +23,26 @@ export default function AutorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
+  const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
+  const searchDebounce = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    loadDocuments();
+    loadCounts();
+  }, [statusFilter]);
 
   useEffect(() => {
     loadDocuments();
-  }, [statusFilter]);
+  }, [currentPage]);
 
   async function loadDocuments() {
     setLoading(true);
     setError(null);
     try {
-      const params: any = {};
+      const params: any = { page: currentPage, limit: PAGE_SIZE };
       if (statusFilter) params.status = statusFilter;
       const data = await getDocuments(params);
       setDocuments(data.documents || []);
@@ -64,21 +74,24 @@ export default function AutorDashboard() {
     }
   }
 
-  // Stats calculation
-  const stats = {
-    total: total,
-    pending: documents.filter(
-      (d) =>
-        d.status === "pending_analysis" || d.status === "pending_review"
-    ).length,
-    approved: documents.filter(
-      (d) =>
-        d.status === "approved" ||
-        d.status === "formatted" ||
-        d.status === "published"
-    ).length,
-    rejected: documents.filter((d) => d.status === "rejected").length,
-  };
+  async function loadCounts() {
+    try {
+      const [pa, pr, ap, fm, pb, rj] = await Promise.allSettled([
+        getDocuments({ status: "pending_analysis", limit: 1 }),
+        getDocuments({ status: "pending_review", limit: 1 }),
+        getDocuments({ status: "approved", limit: 1 }),
+        getDocuments({ status: "formatted", limit: 1 }),
+        getDocuments({ status: "published", limit: 1 }),
+        getDocuments({ status: "rejected", limit: 1 }),
+      ]);
+      const get = (r: PromiseSettledResult<any>) => r.status === "fulfilled" ? r.value.total : 0;
+      setCounts({
+        pending: get(pa) + get(pr),
+        approved: get(ap) + get(fm) + get(pb),
+        rejected: get(rj),
+      });
+    } catch {}
+  }
 
   return (
     <div className="p-8">
@@ -102,22 +115,22 @@ export default function AutorDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="stat-card">
           <div className="stat-label">Total</div>
-          <div className="stat-value">{stats.total}</div>
+          <div className="stat-value">{total}</div>
           <div className="stat-sub">documentos submetidos</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Pendentes</div>
-          <div className="stat-value" style={{ color: "var(--warning)" }}>{stats.pending}</div>
+          <div className="stat-value" style={{ color: "var(--warning)" }}>{counts.pending}</div>
           <div className="stat-sub">aguardando análise</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Aprovados</div>
-          <div className="stat-value" style={{ color: "var(--success)" }}>{stats.approved}</div>
+          <div className="stat-value" style={{ color: "var(--success)" }}>{counts.approved}</div>
           <div className="stat-sub">prontos ou publicados</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Rejeitados</div>
-          <div className="stat-value" style={{ color: "var(--danger)" }}>{stats.rejected}</div>
+          <div className="stat-value" style={{ color: "var(--danger)" }}>{counts.rejected}</div>
           <div className="stat-sub">necessitam revisão</div>
         </div>
       </div>
@@ -134,8 +147,25 @@ export default function AutorDashboard() {
             type="text"
             placeholder="Buscar por código ou título..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              if (searchDebounce.current) clearTimeout(searchDebounce.current);
+              searchDebounce.current = setTimeout(() => {
+                if (val.trim()) {
+                  handleSearch();
+                } else {
+                  setCurrentPage(1);
+                  loadDocuments();
+                }
+              }, 400);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (searchDebounce.current) clearTimeout(searchDebounce.current);
+                handleSearch();
+              }
+            }}
             className="input-field pl-10"
           />
         </div>
@@ -201,7 +231,7 @@ export default function AutorDashboard() {
       )}
 
       {/* Documents table */}
-      {!loading && documents.length > 0 && (
+      {!loading && documents.length > 0 && (<>
         <div className="table-container">
           <table>
             <thead>
@@ -210,7 +240,7 @@ export default function AutorDashboard() {
                 <th>Título</th>
                 <th>Versão</th>
                 <th>Status</th>
-                <th>Tags</th>
+                <th>Tipo</th>
                 <th>Data</th>
                 <th style={{ textAlign: "right" }}>Ação</th>
               </tr>
@@ -241,21 +271,17 @@ export default function AutorDashboard() {
                     <StatusBadge status={doc.status} />
                   </td>
                   <td>
-                    <div className="flex flex-wrap gap-1">
-                      {doc.tags?.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="chip"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {doc.tags && doc.tags.length > 3 && (
-                        <span className="chip">
-                          +{doc.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
+                    <span style={{
+                      display: "inline-block",
+                      padding: "2px 8px",
+                      borderRadius: "var(--radius-sm)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: "rgba(59,130,246,0.1)",
+                      color: "var(--accent)",
+                    }}>
+                      {doc.document_type || "\u2014"}
+                    </span>
                   </td>
                   <td>
                     <span style={{ color: "var(--text-secondary)" }}>
@@ -276,7 +302,32 @@ export default function AutorDashboard() {
             </tbody>
           </table>
         </div>
-      )}
+        {total > PAGE_SIZE && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, fontSize: 13, color: "var(--text-secondary)" }}>
+            <span>
+              Mostrando {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, total)} de {total}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="btn-secondary"
+                style={{ padding: "6px 12px", fontSize: 13 }}
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => p + 1)}
+                disabled={currentPage * PAGE_SIZE >= total}
+                className="btn-secondary"
+                style={{ padding: "6px 12px", fontSize: 13 }}
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
+        )}
+      </>)}
     </div>
   );
 }

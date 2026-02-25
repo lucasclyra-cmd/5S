@@ -18,6 +18,7 @@ import {
   deleteDefaultApprover,
 } from "@/lib/api";
 import type { DefaultApprover } from "@/types";
+import { useToast } from "@/lib/toast-context";
 
 const DOC_TYPE_OPTIONS = [
   { value: "", label: "Todos os tipos" },
@@ -27,10 +28,12 @@ const DOC_TYPE_OPTIONS = [
 ];
 
 export default function AprovadoresPadrao() {
+  const { showToast } = useToast();
   const [approvers, setApprovers] = useState<DefaultApprover[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -74,6 +77,7 @@ export default function AprovadoresPadrao() {
       } else {
         await createDefaultApprover(data);
       }
+      showToast(editId ? "Aprovador atualizado." : "Aprovador adicionado.", "success");
       resetForm();
       await loadApprovers();
     } catch (err: any) {
@@ -86,6 +90,8 @@ export default function AprovadoresPadrao() {
   async function handleDelete(id: number) {
     try {
       await deleteDefaultApprover(id);
+      setDeleteConfirmId(null);
+      showToast("Aprovador removido.", "success");
       await loadApprovers();
     } catch (err: any) {
       setError(err.message || "Erro ao remover aprovador");
@@ -280,13 +286,31 @@ export default function AprovadoresPadrao() {
                       >
                         <Edit2 size={14} />
                       </button>
-                      <button
-                        onClick={() => handleDelete(approver.id)}
-                        className="btn-action"
-                        style={{ color: "var(--danger)" }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {deleteConfirmId === approver.id ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleDelete(approver.id)}
+                            className="btn-danger"
+                            style={{ padding: "6px 12px", fontSize: 12 }}
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="btn-ghost"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteConfirmId(approver.id)}
+                          className="btn-action"
+                          style={{ color: "var(--danger)" }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

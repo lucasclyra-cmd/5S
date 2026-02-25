@@ -9,13 +9,14 @@ import { ChevronRight } from "lucide-react";
 const breadcrumbMap: Record<string, string> = {
   autor: "Autor",
   processos: "Processos",
-  admin: "Administracao",
+  admin: "Administra\u00e7\u00e3o",
   submeter: "Submeter Documento",
   templates: "Templates",
-  regras: "Regras de Analise",
-  categorias: "Categorias e Tags",
+  regras: "Regras de An\u00e1lise",
+  categorias: "Categorias",
   "lista-mestra": "Lista Mestra",
-  aprovadores: "Aprovadores Padrão",
+  aprovadores: "Aprovadores Padr\u00e3o",
+  importar: "Importar Documentos",
 };
 
 function Breadcrumb() {
@@ -35,7 +36,7 @@ function Breadcrumb() {
             <ChevronRight size={12} style={{ color: "var(--text-muted)" }} />
             <span
               style={{
-                color: isLast ? "var(--text-primary)" : "var(--text-muted)",
+                color: isLast ? "var(--accent)" : "var(--text-muted)",
                 fontWeight: isLast ? 500 : 400,
               }}
             >

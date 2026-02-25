@@ -9,6 +9,7 @@ class TemplateResponse(BaseModel):
     description: Optional[str] = None
     document_type: str
     template_file_path: str
+    docx_file_path: Optional[str] = None
     is_active: bool
     section_mapping: Optional[dict] = None
     header_config: Optional[dict] = None
