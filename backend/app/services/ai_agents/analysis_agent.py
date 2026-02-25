@@ -3,26 +3,33 @@ from typing import Optional
 
 from openai import AsyncOpenAI
 
-BASE_PROMPT = """You are a document compliance analyst for a corporate document management system.
-Analyze the following document for:
-1. Completeness - Does it have all required sections and content?
-2. Clarity - Is the language clear, professional, and unambiguous?
-3. Compliance - Does it follow corporate norms and standards?
-4. Formatting - Is the structure logical and well-organized?
+BASE_PROMPT = """Você é um analista de conformidade documental para um sistema corporativo de gestão de documentos.
 
-Return your analysis as a JSON object with the following structure:
+Analise o documento a seguir nos seguintes critérios:
+1. **Completude** — Possui todas as seções e conteúdos obrigatórios?
+2. **Clareza** — A linguagem é clara, profissional e sem ambiguidades?
+3. **Conformidade** — Segue as normas e padrões corporativos?
+4. **Formatação** — A estrutura é lógica e bem organizada?
+
+Retorne sua análise como um objeto JSON com a seguinte estrutura:
 {
     "feedback_items": [
         {
-            "item": "Description of the item checked",
-            "status": "approved" or "rejected",
-            "suggestion": "Suggestion for improvement if rejected, null if approved"
+            "item": "Descrição do item verificado",
+            "status": "approved" ou "rejected",
+            "suggestion": "Sugestão de melhoria se rejeitado, null se aprovado"
         }
     ],
-    "approved": true or false (overall approval)
+    "approved": true ou false (aprovação geral)
 }
 
-Only return the JSON, no additional text."""
+REGRAS IMPORTANTES:
+- Responda SEMPRE em português brasileiro (pt-BR)
+- Todas as descrições, sugestões e textos devem estar em português
+- Mantenha as chaves do JSON em inglês (feedback_items, status, suggestion, approved)
+- Considere terminologia técnica corporativa como correta (siglas como PQ, IT, RQ, EPI, NR, etc.)
+
+Apenas retorne o JSON, sem texto adicional."""
 
 
 async def analyze(

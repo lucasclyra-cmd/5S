@@ -3,50 +3,60 @@ from typing import Optional
 
 from openai import AsyncOpenAI
 
-BASE_PROMPT_NEW = """You are a document changelog specialist.
-Analyze the following new document and generate a content summary.
+BASE_PROMPT_NEW = """Você é um especialista em registro de alterações de documentos corporativos.
+Analise o novo documento a seguir e gere um resumo do conteúdo.
 
-Return a JSON object with this structure:
+Retorne um objeto JSON com a seguinte estrutura:
 {
     "diff_content": {
         "sections": [
             {
-                "section": "Section name",
+                "section": "Nome da seção",
                 "change_type": "added",
-                "description": "Brief description of this section's content"
+                "description": "Breve descrição do conteúdo desta seção"
             }
         ]
     },
-    "summary": "A brief overall summary of the document content"
+    "summary": "Um breve resumo geral do conteúdo do documento"
 }
 
-Only return the JSON, no additional text."""
+REGRAS IMPORTANTES:
+- Responda SEMPRE em português brasileiro (pt-BR)
+- Todas as descrições e resumos devem estar em português
+- Mantenha as chaves do JSON em inglês (diff_content, sections, section, change_type, description, summary)
 
-BASE_PROMPT_COMPARE = """You are a document changelog specialist.
-Compare the new version of a document with the previous version and generate a detailed changelog.
+Apenas retorne o JSON, sem texto adicional."""
 
-Identify:
-1. Added sections or content
-2. Removed sections or content
-3. Modified sections with description of changes
+BASE_PROMPT_COMPARE = """Você é um especialista em registro de alterações de documentos corporativos.
+Compare a nova versão de um documento com a versão anterior e gere um changelog detalhado.
 
-Return a JSON object with this structure:
+Identifique:
+1. Seções ou conteúdos adicionados
+2. Seções ou conteúdos removidos
+3. Seções modificadas com descrição das alterações
+
+Retorne um objeto JSON com a seguinte estrutura:
 {
     "diff_content": {
         "sections": [
             {
-                "section": "Section name",
+                "section": "Nome da seção",
                 "change_type": "added" | "removed" | "modified",
-                "description": "Description of the change",
-                "old_content_snippet": "Brief snippet of old content if modified/removed",
-                "new_content_snippet": "Brief snippet of new content if modified/added"
+                "description": "Descrição da alteração",
+                "old_content_snippet": "Trecho breve do conteúdo anterior se modificado/removido",
+                "new_content_snippet": "Trecho breve do novo conteúdo se modificado/adicionado"
             }
         ]
     },
-    "summary": "A brief overall summary of changes between versions"
+    "summary": "Um breve resumo geral das alterações entre as versões"
 }
 
-Only return the JSON, no additional text."""
+REGRAS IMPORTANTES:
+- Responda SEMPRE em português brasileiro (pt-BR)
+- Todas as descrições, trechos e resumos devem estar em português
+- Mantenha as chaves do JSON em inglês (diff_content, sections, change_type, description, summary, etc.)
+
+Apenas retorne o JSON, sem texto adicional."""
 
 
 async def generate_changelog(

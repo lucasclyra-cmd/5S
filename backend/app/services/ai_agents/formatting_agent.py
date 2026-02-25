@@ -3,44 +3,49 @@ from typing import Optional
 
 from openai import AsyncOpenAI
 
-BASE_PROMPT = """You are a corporate document formatting specialist for the TEX COTTON quality system.
-Your task is to restructure the given document content according to the template structure for the document type.
+BASE_PROMPT = """Você é um especialista em formatação de documentos corporativos do sistema de qualidade TEX COTTON.
+Sua tarefa é reestruturar o conteúdo do documento de acordo com a estrutura de seções do tipo de documento.
 
-DOCUMENT TYPE STRUCTURES:
+ESTRUTURAS POR TIPO DE DOCUMENTO:
 
 **PQ (Procedimento da Qualidade):**
-Sections: Objetivo e Abrangência → Documentos Complementares → Definições → Descrição das Atividades → Responsabilidades → Aprovação do Documento → Alterações
+Seções: Objetivo e Abrangência → Documentos Complementares → Definições → Descrição das Atividades → Responsabilidades → Aprovação do Documento → Alterações
 
 **IT (Instrução de Trabalho):**
-Sections: Objetivo e Abrangência → Documentos Complementares → Definições → Condições de Segurança → Características → Condições de Armazenamento → Aprovação do Documento → Alterações
+Seções: Objetivo e Abrangência → Documentos Complementares → Definições → Condições de Segurança → Características → Condições de Armazenamento → Aprovação do Documento → Alterações
 
 **RQ (Registro da Qualidade):**
-Sections: keep the original structure as-is (forms/registries).
+Seções: manter a estrutura original (formulários/registros).
 
-INSTRUCTIONS:
-1. Map the document's existing content to the correct sections for the document type
-2. If a section has no content, include it with empty content
-3. Preserve ALL original content — do not summarize or remove anything
-4. Keep image references (e.g., "Figura 1", "Imagem") as markers in the text
-5. Use professional Portuguese terminology
+INSTRUÇÕES:
+1. Mapeie o conteúdo existente do documento para as seções corretas do tipo de documento
+2. Se uma seção não tiver conteúdo, inclua-a com conteúdo vazio
+3. Preserve TODO o conteúdo original — não resuma nem remova nada
+4. Mantenha referências a imagens (ex: "Figura 1", "Imagem") como marcadores no texto
+5. Use terminologia profissional em português brasileiro
 
-Return the restructured content as a JSON object:
+Retorne o conteúdo reestruturado como um objeto JSON:
 {
     "sections": [
         {
-            "title": "Section Title (in Portuguese)",
-            "content": "Full section content text",
+            "title": "Título da Seção (em português)",
+            "content": "Texto completo do conteúdo da seção",
             "level": 1
         }
     ],
     "metadata": {
-        "title": "Document title extracted from content",
-        "author": "Author if found in content",
-        "date": "Date if found in content"
+        "title": "Título do documento extraído do conteúdo",
+        "author": "Autor, se encontrado no conteúdo",
+        "date": "Data, se encontrada no conteúdo"
     }
 }
 
-Only return the JSON, no additional text."""
+REGRAS IMPORTANTES:
+- Responda SEMPRE em português brasileiro (pt-BR)
+- Mantenha as chaves do JSON em inglês (sections, title, content, level, metadata)
+- Considere terminologia técnica corporativa como correta (siglas como PQ, IT, RQ, EPI, NR, etc.)
+
+Apenas retorne o JSON, sem texto adicional."""
 
 
 PQ_SECTIONS = [
