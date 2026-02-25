@@ -178,12 +178,13 @@ async def resubmit_document(
     code: str,
     file: UploadFile = File(...),
     created_by_profile: str = Form("autor"),
+    change_summary: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     """Resubmit a document with a new file, creating a new version."""
     try:
         doc, version = await document_service.resubmit_document(
-            db, code, file, created_by_profile
+            db, code, file, created_by_profile, change_summary or None
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -218,3 +219,61 @@ async def skip_ai_approval(
         raise HTTPException(status_code=404, detail=str(e))
 
     return {"message": "Document sent to workflow queue", "workflow_item_id": item.id}
+
+
+@router.post("/{code}/publish")
+async def publish_document(
+    code: str,
+    version_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Publish a document: set current version to 'published', mark previous published versions as 'obsolete'."""
+    from datetime import datetime, timezone as tz
+    from sqlalchemy import select
+    from app.models.version import DocumentVersion
+
+    doc = await document_service.get_document_by_code(db, code)
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Documento '{code}' não encontrado")
+
+    # Find the version to publish
+    if version_id is None:
+        target = next(
+            (v for v in reversed(doc.versions) if v.status == "approved"),
+            None
+        )
+        if target is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Nenhuma versão aprovada encontrada para publicar"
+            )
+    else:
+        target = next((v for v in doc.versions if v.id == version_id), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Versão não encontrada")
+
+    now = datetime.now(tz.utc)
+
+    # Mark all previously published versions as obsolete
+    for v in doc.versions:
+        if v.id != target.id and v.status == "published":
+            v.status = "obsolete"
+            v.obsolete_at = now
+
+    # Publish the target version
+    target.status = "published"
+    target.published_at = now
+
+    # Update document-level status
+    doc.status = "active"
+    doc.effective_date = now
+    doc.updated_at = now
+
+    await db.commit()
+    await db.refresh(doc)
+
+    return {
+        "message": f"Documento {code} publicado com sucesso",
+        "version_id": target.id,
+        "published_at": now.isoformat(),
+    }
