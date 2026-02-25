@@ -41,6 +41,8 @@ def _chain_to_response(chain) -> ChainResponse:
                 is_required=a.is_required,
                 ai_recommended=a.ai_recommended,
                 acted_at=a.acted_at,
+                approval_level=a.approval_level,
+                deadline=a.deadline,
             )
             for a in (chain.approvers or [])
         ],

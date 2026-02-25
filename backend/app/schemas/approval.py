@@ -12,6 +12,8 @@ class ApproverInput(BaseModel):
     is_required: bool = True
     ai_recommended: bool = False
     order: int = 0
+    approval_level: int = 0
+    deadline: Optional[datetime] = None
 
 
 class ApproverResponse(BaseModel):
@@ -26,6 +28,8 @@ class ApproverResponse(BaseModel):
     is_required: bool
     ai_recommended: bool
     acted_at: Optional[datetime] = None
+    approval_level: int = 0
+    deadline: Optional[datetime] = None
 
 
 # ─── Chain DTOs ──────────────────────────────────────────────

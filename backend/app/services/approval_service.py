@@ -34,6 +34,8 @@ async def create_approval_chain(
             order=approver_data.get("order", i),
             is_required=approver_data.get("is_required", True),
             ai_recommended=approver_data.get("ai_recommended", False),
+            approval_level=approver_data.get("approval_level", 0),
+            deadline=approver_data.get("deadline"),
         )
         db.add(approver)
 
@@ -105,6 +107,25 @@ async def record_approver_action(
         raise ValueError(f"Aprovador {approver_id} não encontrado na cadeia {chain_id}")
     if approver.action is not None:
         raise ValueError(f"Aprovador {approver.approver_name} já registrou sua decisão")
+
+    # Enforce level-based order - required approvers from lower levels must have acted first
+    chain_result = await db.execute(
+        select(ApprovalChain).where(ApprovalChain.id == chain_id).options(selectinload(ApprovalChain.approvers))
+    )
+    chain = chain_result.scalar_one_or_none()
+    if chain:
+        current_level = approver.approval_level
+        # Predecessors: required approvers from a LOWER level who haven't acted yet
+        predecessors = [
+            a for a in chain.approvers
+            if a.is_required and a.approval_level < current_level and a.action is None
+        ]
+        if predecessors:
+            names = ", ".join(a.approver_name for a in predecessors)
+            raise ValueError(
+                f"O aprovador '{approver.approver_name}' não pode agir ainda. "
+                f"Aguardando nível anterior: {names}."
+            )
 
     approver.action = action
     approver.comments = comments
