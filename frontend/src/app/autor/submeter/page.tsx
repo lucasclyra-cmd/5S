@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send, Loader2, X, FileText } from "lucide-react";
+import { ArrowLeft, Send, Loader2, FileText } from "lucide-react";
 import Link from "next/link";
 import DocumentUpload from "@/components/DocumentUpload";
-import { uploadDocument, getCategories, getTags, getNextCode } from "@/lib/api";
-import type { Category, Tag } from "@/types";
+import { uploadDocument, getCategories, getNextCode } from "@/lib/api";
+import type { Category } from "@/types";
 
 const DOCUMENT_TYPES = [
   {
@@ -34,10 +34,7 @@ export default function SubmeterDocumento() {
   const [title, setTitle] = useState("");
   const [sector, setSector] = useState("");
   const [categoryId, setCategoryId] = useState<number | undefined>(undefined);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingCode, setLoadingCode] = useState(false);
@@ -68,33 +65,10 @@ export default function SubmeterDocumento() {
 
   async function loadMetadata() {
     try {
-      const [cats, tags] = await Promise.all([
-        getCategories().catch(() => []),
-        getTags().catch(() => []),
-      ]);
+      const cats = await getCategories().catch(() => []);
       setCategories(cats);
-      setAvailableTags(tags);
     } catch {
       // silently fail, fields will just not have options
-    }
-  }
-
-  function addTag(tagName: string) {
-    const trimmed = tagName.trim();
-    if (trimmed && !selectedTags.includes(trimmed)) {
-      setSelectedTags([...selectedTags, trimmed]);
-    }
-    setTagInput("");
-  }
-
-  function removeTag(tagName: string) {
-    setSelectedTags(selectedTags.filter((t) => t !== tagName));
-  }
-
-  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag(tagInput);
     }
   }
 
@@ -121,7 +95,6 @@ export default function SubmeterDocumento() {
         document_type: documentType,
         title: title.trim(),
         category_id: categoryId,
-        tags: selectedTags,
         created_by_profile: "autor",
         sector: sector.trim() || undefined,
       });
@@ -303,57 +276,6 @@ export default function SubmeterDocumento() {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Tags */}
-        <div>
-          <label className="label-field">Tags</label>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {selectedTags.map((tag) => (
-              <span
-                key={tag}
-                className="chip inline-flex items-center gap-1"
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="rounded-full p-0.5 transition-colors"
-                  style={{ color: "var(--accent-hover)" }}
-                  disabled={uploading}
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleTagKeyDown}
-              placeholder="Digite uma tag e pressione Enter"
-              className="input-field flex-1"
-              disabled={uploading}
-              list="available-tags"
-            />
-            <datalist id="available-tags">
-              {availableTags
-                .filter((t) => !selectedTags.includes(t.name))
-                .map((t) => (
-                  <option key={t.id} value={t.name} />
-                ))}
-            </datalist>
-            <button
-              type="button"
-              onClick={() => addTag(tagInput)}
-              className="btn-secondary"
-              disabled={uploading || !tagInput.trim()}
-            >
-              Adicionar
-            </button>
-          </div>
         </div>
 
         {/* Submit */}
