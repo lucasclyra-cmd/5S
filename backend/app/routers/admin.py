@@ -263,3 +263,37 @@ async def update_prompt(config_id: int, body: AdminConfigUpdate, db: AsyncSessio
 @router.delete("/prompts/{config_id}")
 async def delete_prompt(config_id: int, db: AsyncSession = Depends(get_db)):
     return await _delete_config(db, config_id, "prompt")
+
+
+# ---- AI Usage Statistics ----
+
+
+@router.get("/ai-usage")
+async def get_ai_usage_stats(db: AsyncSession = Depends(get_db)):
+    """Get aggregated AI token usage and estimated cost statistics."""
+    from sqlalchemy import func
+    from app.models.ai_usage_log import AIUsageLog
+
+    result = await db.execute(
+        select(
+            AIUsageLog.agent_type,
+            AIUsageLog.model,
+            func.count(AIUsageLog.id).label("calls"),
+            func.sum(AIUsageLog.tokens_input).label("total_input_tokens"),
+            func.sum(AIUsageLog.tokens_output).label("total_output_tokens"),
+            func.sum(AIUsageLog.estimated_cost_usd).label("total_cost_usd"),
+        ).group_by(AIUsageLog.agent_type, AIUsageLog.model)
+        .order_by(AIUsageLog.agent_type)
+    )
+    rows = result.all()
+    return [
+        {
+            "agent_type": r.agent_type,
+            "model": r.model,
+            "calls": r.calls,
+            "total_input_tokens": r.total_input_tokens or 0,
+            "total_output_tokens": r.total_output_tokens or 0,
+            "total_cost_usd": round(r.total_cost_usd or 0, 6),
+        }
+        for r in rows
+    ]

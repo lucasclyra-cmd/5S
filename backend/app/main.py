@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.database import engine, async_session_factory, Base
 from app.config import settings
 from app.models.template import DocumentTemplate
-from app.routers import documents, ai_routes, workflow, admin, export, master_list, approval, templates, bulk_import
+from app.routers import documents, ai_routes, workflow, admin, export, master_list, approval, templates, bulk_import, distribution, audit_report
 
 # Import all models so they are registered with Base.metadata
 import app.models  # noqa: F401
@@ -140,6 +140,8 @@ app.include_router(master_list.router)
 app.include_router(approval.router)
 app.include_router(templates.router)
 app.include_router(bulk_import.router)
+app.include_router(distribution.router)
+app.include_router(audit_report.router)
 
 
 @app.get("/")
