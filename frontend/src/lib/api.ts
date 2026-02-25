@@ -18,6 +18,8 @@ import type {
   TemplatePlaceholderPreview,
   ScanResponse,
   ImportResponse,
+  TextReview,
+  DistributionEntry,
 } from "@/types";
 
 const API_URL =
@@ -148,11 +150,15 @@ export async function getVersion(
 export async function resubmitDocument(
   code: string,
   file: File,
-  profile: string
+  profile: string,
+  changeSummary?: string
 ): Promise<{ document: Document; version: DocumentVersion }> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("created_by_profile", profile);
+  if (changeSummary) {
+    formData.append("change_summary", changeSummary);
+  }
 
   return request(`/api/documents/${encodeURIComponent(code)}/resubmit`, {
     method: "POST",
@@ -195,6 +201,12 @@ export async function formatDocument(
   return request(`/api/ai/format/${versionId}`, {
     method: "POST",
   });
+}
+
+export async function getChangelog(
+  versionId: number
+): Promise<Changelog> {
+  return request(`/api/ai/changelog/${versionId}`);
 }
 
 export async function generateChangelog(
@@ -535,6 +547,10 @@ export async function deleteTemplate(id: number): Promise<void> {
   return request(`/api/templates/${id}`, { method: "DELETE" });
 }
 
+export function getTemplateDownloadUrl(templateId: number): string {
+  return `${API_URL}/api/templates/${templateId}/download`;
+}
+
 // ─── Export ──────────────────────────────────────────────────
 
 export function getExportUrl(
@@ -558,4 +574,140 @@ export async function executeImport(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ exclude_codes: excludeCodes }),
   });
+}
+
+// ─── Text Review (Spelling/Clarity) ─────────────────────────
+
+export async function getTextReview(
+  versionId: number
+): Promise<TextReview | null> {
+  try {
+    return await request<TextReview>(
+      `/api/ai/text-review/${versionId}`
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function getTextReviewHistory(
+  versionId: number
+): Promise<TextReview[]> {
+  return request<TextReview[]>(
+    `/api/ai/text-review/${versionId}/history`
+  );
+}
+
+export async function submitTextReview(
+  versionId: number,
+  userText: string,
+  skipClarity: boolean = false
+): Promise<TextReview> {
+  return request<TextReview>(
+    `/api/ai/text-review/${versionId}/submit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_text: userText,
+        skip_clarity: skipClarity,
+      }),
+    }
+  );
+}
+
+export async function acceptTextReview(
+  versionId: number
+): Promise<TextReview> {
+  return request<TextReview>(
+    `/api/ai/text-review/${versionId}/accept`,
+    { method: "POST" }
+  );
+}
+
+// ── Publicação de documentos ──────────────────────────────────
+
+export async function publishDocument(
+  code: string,
+  versionId?: number
+): Promise<{ message: string; version_id: number; published_at: string }> {
+  const params = versionId ? `?version_id=${versionId}` : "";
+  return request(`/api/documents/${encodeURIComponent(code)}/publish${params}`, {
+    method: "POST",
+  });
+}
+
+// ── Lista de distribuição ─────────────────────────────────────
+
+export async function getDistribution(
+  documentId: number
+): Promise<{ distributions: DistributionEntry[]; total: number }> {
+  return request(`/api/distribution/${documentId}`);
+}
+
+export async function addToDistribution(
+  documentId: number,
+  data: { recipient_name: string; recipient_role?: string; recipient_email?: string }
+): Promise<DistributionEntry> {
+  return request(`/api/distribution/${documentId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function notifyAllRecipients(
+  documentId: number
+): Promise<{ message: string; notified_at: string }> {
+  return request(`/api/distribution/${documentId}/notify-all`, {
+    method: "POST",
+  });
+}
+
+export async function acknowledgeDistribution(
+  entryId: number
+): Promise<DistributionEntry> {
+  return request(`/api/distribution/entries/${entryId}/acknowledge`, {
+    method: "POST",
+  });
+}
+
+export async function removeFromDistribution(entryId: number): Promise<void> {
+  return request(`/api/distribution/entries/${entryId}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Relatório de auditoria ────────────────────────────────────
+
+export function getAuditReportUrl(code: string): string {
+  return `${API_URL}/api/audit/${encodeURIComponent(code)}`;
+}
+
+// ── Estatísticas de uso de IA ─────────────────────────────────
+
+export async function getAIUsageStats(): Promise<
+  Array<{
+    agent_type: string;
+    model: string;
+    calls: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cost_usd: number;
+  }>
+> {
+  try {
+    return await request<
+      Array<{
+        agent_type: string;
+        model: string;
+        calls: number;
+        total_input_tokens: number;
+        total_output_tokens: number;
+        total_cost_usd: number;
+      }>
+    >("/api/admin/ai-usage");
+  } catch {
+    return [];
+  }
 }

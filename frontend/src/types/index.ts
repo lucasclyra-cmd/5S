@@ -14,6 +14,9 @@ export interface Document {
   revision_number: number;
   sector: string | null;
   effective_date: string | null;
+  review_due_date?: string | null;
+  retention_years?: number | null;
+  confidentiality_level?: string | null;  // 'publico' | 'interno' | 'restrito' | 'confidencial'
 }
 
 export interface DocumentVersion {
@@ -28,6 +31,9 @@ export interface DocumentVersion {
   status: string;
   submitted_at: string;
   archived_at: string | null;
+  change_summary: string | null;
+  published_at?: string | null;
+  obsolete_at?: string | null;
 }
 
 export interface FeedbackItem {
@@ -127,6 +133,8 @@ export interface ApprovalChainApprover {
   is_required: boolean;
   ai_recommended: boolean;
   acted_at: string | null;
+  deadline?: string | null;
+  approval_level?: number;
 }
 
 export interface ApprovalChain {
@@ -178,6 +186,7 @@ export interface DocumentTemplate {
   description: string | null;
   document_type: string;
   template_file_path: string;
+  docx_file_path: string | null;
   is_active: boolean;
   section_mapping: Record<string, any> | null;
   header_config: Record<string, any> | null;
@@ -250,4 +259,50 @@ export interface ImportResponse {
   total_skipped: number;
   total_errors: number;
   results: ImportedDocumentResult[];
+}
+
+// ─── Text Review (Spelling/Clarity Loop) ────────────────────
+
+export interface SpellingError {
+  original: string;
+  corrected: string;
+  position: string;
+  context: string;
+}
+
+export interface ClaritySuggestion {
+  original: string;
+  suggested: string;
+  reason: string;
+  position: string;
+}
+
+export interface TextReview {
+  id: number;
+  version_id: number;
+  iteration: number;
+  original_text: string;
+  ai_corrected_text: string | null;
+  user_text: string | null;
+  spelling_errors: SpellingError[];
+  clarity_suggestions: ClaritySuggestion[];
+  has_spelling_errors: boolean;
+  has_clarity_suggestions: boolean;
+  status: string;
+  user_skipped_clarity: boolean;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+// ─── Distribution List ───────────────────────────────────────
+
+export interface DistributionEntry {
+  id: number;
+  document_id: number;
+  recipient_name: string;
+  recipient_role?: string | null;
+  recipient_email?: string | null;
+  notified_at?: string | null;
+  acknowledged_at?: string | null;
+  created_at: string;
 }
