@@ -9,12 +9,19 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  BookOpen,
+  FileBarChart,
+  ClipboardList,
 } from "lucide-react";
 import {
   getDocument,
   getAnalysis,
+  getChangelog,
   generateChangelog,
   getApprovalChain,
+  getTextReviewHistory,
+  publishDocument,
+  getAuditReportUrl,
 } from "@/lib/api";
 import type {
   DocumentWithVersions,
@@ -22,6 +29,7 @@ import type {
   AIAnalysis,
   Changelog,
   ApprovalChain,
+  TextReview,
 } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
@@ -29,18 +37,30 @@ import AIFeedback from "@/components/AIFeedback";
 import ChangelogViewer from "@/components/ChangelogViewer";
 import DocumentPreview from "@/components/DocumentPreview";
 import ApprovalChainView from "@/components/ApprovalChain";
+import DistributionPanel from "@/components/DistributionPanel";
+import { useToast } from "@/lib/toast-context";
+
+const CONFIDENTIALITY_LABELS: Record<string, string> = {
+  publico: "Público",
+  interno: "Interno",
+  restrito: "Restrito",
+  confidencial: "Confidencial",
+};
 
 export default function ProcessosReviewPage() {
   const params = useParams();
   const router = useRouter();
   const docCode = params.docId as string;
+  const { showToast } = useToast();
 
   const [document, setDocument] = useState<DocumentWithVersions | null>(null);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [changelog, setChangelog] = useState<Changelog | null>(null);
   const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
+  const [textReviewHistory, setTextReviewHistory] = useState<TextReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -62,16 +82,31 @@ export default function ProcessosReviewPage() {
           setAnalysis(null);
         }
         try {
-          const cl = await generateChangelog(currentVersion.id);
+          const cl = await getChangelog(currentVersion.id);
           setChangelog(cl);
-        } catch {
-          setChangelog(null);
+        } catch (err: any) {
+          if (err?.status === 404) {
+            try {
+              const cl = await generateChangelog(currentVersion.id);
+              setChangelog(cl);
+            } catch {
+              setChangelog(null);
+            }
+          } else {
+            setChangelog(null);
+          }
         }
         try {
           const chain = await getApprovalChain(currentVersion.id);
           setApprovalChain(chain);
         } catch {
           setApprovalChain(null);
+        }
+        try {
+          const history = await getTextReviewHistory(currentVersion.id);
+          setTextReviewHistory(Array.isArray(history) ? history : []);
+        } catch {
+          setTextReviewHistory([]);
         }
       }
     } catch (err: any) {
@@ -91,6 +126,20 @@ export default function ProcessosReviewPage() {
     // Reload document if chain resolved
     if (updatedChain.status === "approved" || updatedChain.status === "rejected") {
       loadDocument();
+    }
+  }
+
+  async function handlePublish() {
+    if (!document) return;
+    setPublishing(true);
+    try {
+      await publishDocument(document.code);
+      showToast("Documento publicado com sucesso!", "success");
+      await loadDocument();
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao publicar documento", "error");
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -134,6 +183,7 @@ export default function ProcessosReviewPage() {
   if (!document) return null;
 
   const currentVersion = getCurrentVersion();
+  const hasISOInfo = document.review_due_date || document.retention_years || document.confidentiality_level;
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -217,6 +267,143 @@ export default function ProcessosReviewPage() {
         </div>
       </div>
 
+      {/* ISO Compliance Info Panel */}
+      {hasISOInfo && (
+        <div
+          className="mb-6"
+          style={{
+            background: "var(--accent-light)",
+            border: "1px solid var(--accent-border)",
+            borderRadius: "var(--radius-md)",
+            padding: 16,
+          }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <ClipboardList size={16} style={{ color: "var(--accent)" }} />
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+              Informações de Conformidade ISO
+            </h4>
+          </div>
+          <div
+            className="flex flex-wrap gap-x-6 gap-y-1"
+            style={{ fontSize: 13, color: "var(--text-secondary)" }}
+          >
+            {document.review_due_date && (
+              <span>
+                Revisão prevista:{" "}
+                <strong style={{ color: "var(--text-primary)" }}>
+                  {new Date(document.review_due_date).toLocaleDateString("pt-BR")}
+                </strong>
+              </span>
+            )}
+            {document.retention_years && (
+              <span>
+                Retenção:{" "}
+                <strong style={{ color: "var(--text-primary)" }}>
+                  {document.retention_years} {document.retention_years === 1 ? "ano" : "anos"}
+                </strong>
+              </span>
+            )}
+            {document.confidentiality_level && (
+              <span>
+                Confidencialidade:{" "}
+                <strong style={{ color: "var(--text-primary)" }}>
+                  {CONFIDENTIALITY_LABELS[document.confidentiality_level] ?? document.confidentiality_level}
+                </strong>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Audit Report Link */}
+      <div className="mb-6">
+        <a
+          href={getAuditReportUrl(document.code)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2"
+          style={{
+            fontSize: 13,
+            color: "var(--accent)",
+            textDecoration: "none",
+            padding: "6px 12px",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--accent-border)",
+            background: "var(--accent-light)",
+          }}
+        >
+          <FileBarChart size={15} />
+          Relatório de Auditoria (PDF)
+        </a>
+      </div>
+
+      {/* Publish button — shown when document is approved */}
+      {document.status === "approved" && !currentVersion?.published_at && (
+        <div
+          className="card mb-6"
+          style={{
+            background: "rgba(45, 138, 78, 0.06)",
+            border: "1px solid var(--success)",
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                Documento Aprovado
+              </h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                A cadeia de aprovação foi concluída. O documento pode ser publicado.
+              </p>
+            </div>
+            <button
+              onClick={handlePublish}
+              disabled={publishing}
+              className="btn-primary"
+              style={{ flexShrink: 0 }}
+            >
+              {publishing ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <BookOpen size={18} />
+              )}
+              Publicar Documento
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reviewer action context banner */}
+      {approvalChain && approvalChain.status === "pending" && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 24,
+            background: "rgba(230,168,23,0.06)",
+            border: "1px solid var(--accent-border)",
+          }}
+        >
+          <div className="flex items-center gap-3" style={{ marginBottom: 8 }}>
+            <AlertCircle size={20} style={{ color: "var(--warning)", flexShrink: 0 }} />
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+              Documento aguardando aprovação
+            </h3>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+            Revise a análise da IA, o histórico de revisão textual e o changelog abaixo.
+            Use os controles da Cadeia de Aprovação para registrar sua decisão.
+          </p>
+          <div className="flex gap-4" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            <span>
+              Aprovadores: {approvalChain.approvers?.filter((a: any) => a.action === "approve").length ?? 0}/{approvalChain.approvers?.length ?? 0}
+            </span>
+            {approvalChain.requires_training && (
+              <span style={{ color: "var(--warning)" }}>Requer treinamento</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Approval Chain */}
       {approvalChain && (
         <div className="mb-6">
@@ -250,6 +437,57 @@ export default function ProcessosReviewPage() {
         </div>
       )}
 
+      {/* Text Review History */}
+      {textReviewHistory.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>
+            Histórico de Revisão Textual
+          </h3>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+            Revisões ortográficas e de clareza realizadas antes da aprovação.
+          </p>
+          {textReviewHistory.map((rev, idx) => (
+            <div
+              key={rev.id || idx}
+              style={{
+                padding: "10px 14px",
+                marginBottom: 8,
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border)",
+                background: "var(--bg-main)",
+                fontSize: 13,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Iteração {rev.iteration}
+                </span>
+                <span style={{
+                  padding: "2px 8px",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: rev.status === "clean" ? "rgba(34,197,94,0.1)" : "rgba(59,130,246,0.1)",
+                  color: rev.status === "clean" ? "var(--success)" : "var(--accent)",
+                }}>
+                  {rev.status === "clean" ? "Sem erros" : rev.status === "user_accepted" ? "Aceito pelo autor" : rev.status === "user_edited" ? "Editado pelo autor" : rev.status}
+                </span>
+              </div>
+              {rev.spelling_errors && rev.spelling_errors.length > 0 && (
+                <p style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                  {rev.spelling_errors.length} erro(s) ortográfico(s) encontrado(s)
+                </p>
+              )}
+              {rev.clarity_suggestions && rev.clarity_suggestions.length > 0 && (
+                <p style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                  {rev.clarity_suggestions.length} sugestão(ões) de clareza
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Changelog */}
       {changelog && (
         <div className="mb-6">
@@ -261,6 +499,13 @@ export default function ProcessosReviewPage() {
       {currentVersion?.extracted_text && (
         <div className="mb-6">
           <DocumentPreview text={currentVersion.extracted_text} />
+        </div>
+      )}
+
+      {/* Distribution panel */}
+      {document && (
+        <div className="mb-6">
+          <DistributionPanel documentId={document.id} documentCode={document.code} />
         </div>
       )}
     </div>
