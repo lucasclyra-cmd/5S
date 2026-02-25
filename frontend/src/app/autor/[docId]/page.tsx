@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,6 +16,7 @@ import {
   AlertCircle,
   FileDown,
   History,
+  Upload,
 } from "lucide-react";
 import {
   getDocument,
@@ -24,9 +25,13 @@ import {
   formatDocument,
   skipAiApproval,
   resubmitDocument,
+  getChangelog,
   generateChangelog,
   getExportUrl,
   getApprovalChain,
+  getTextReview,
+  submitTextReview,
+  acceptTextReview,
 } from "@/lib/api";
 import type {
   DocumentWithVersions,
@@ -34,6 +39,7 @@ import type {
   AIAnalysis,
   Changelog,
   ApprovalChain,
+  TextReview,
 } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
@@ -43,8 +49,11 @@ import DocumentPreview from "@/components/DocumentPreview";
 import DocumentUpload from "@/components/DocumentUpload";
 import ApproverSelector from "@/components/ApproverSelector";
 import ApprovalChainView from "@/components/ApprovalChain";
+import TextReviewPanel from "@/components/TextReviewPanel";
+import { useToast } from "@/lib/toast-context";
 
 export default function DocumentDetail() {
+  const { showToast } = useToast();
   const params = useParams();
   const router = useRouter();
   const docCode = params.docId as string;
@@ -54,43 +63,93 @@ export default function DocumentDetail() {
   const [changelog, setChangelog] = useState<Changelog | null>(null);
   const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [loadingChangelog, setLoadingChangelog] = useState(false);
+  const [loadingChain, setLoadingChain] = useState(false);
+  const [loadingReview, setLoadingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [resubmitFile, setResubmitFile] = useState<File | null>(null);
   const [showResubmit, setShowResubmit] = useState(false);
+  const [changeSummary, setChangeSummary] = useState("");
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [textReview, setTextReview] = useState<TextReview | null>(null);
+  const [textReviewLoading, setTextReviewLoading] = useState(false);
+  const autoAnalysisTriggered = useRef(false);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    autoAnalysisTriggered.current = false;
     loadDocument();
   }, [docCode]);
 
+  // Phase 1: Fetch the document and render the header immediately
+  async function loadDocumentOnly() {
+    try {
+      const doc = await getDocument(docCode);
+      setDocument(doc);
+      return doc;
+    } catch (err: any) {
+      setError(err.message || "Erro ao carregar documento");
+      return null;
+    }
+  }
+
+  // Phase 2: Fetch secondary data in parallel
+  async function loadSecondaryData(doc: DocumentWithVersions) {
+    if (!doc.versions || doc.versions.length === 0) return;
+    const currentVersion = doc.versions[doc.versions.length - 1];
+
+    setLoadingAnalysis(true);
+    setLoadingChangelog(true);
+    setLoadingChain(true);
+    setLoadingReview(true);
+
+    async function fetchChangelog(versionId: number): Promise<Changelog | null> {
+      try {
+        return await getChangelog(versionId);
+      } catch (err: any) {
+        if (err?.status === 404) {
+          try {
+            return await generateChangelog(versionId);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      }
+    }
+
+    const [analysisResult, changelogResult, chainResult, reviewResult] =
+      await Promise.allSettled([
+        getAnalysis(currentVersion.id),
+        fetchChangelog(currentVersion.id),
+        getApprovalChain(currentVersion.id),
+        getTextReview(currentVersion.id),
+      ]);
+
+    setAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
+    setLoadingAnalysis(false);
+
+    setChangelog(changelogResult.status === "fulfilled" ? changelogResult.value : null);
+    setLoadingChangelog(false);
+
+    setApprovalChain(chainResult.status === "fulfilled" ? chainResult.value : null);
+    setLoadingChain(false);
+
+    setTextReview(reviewResult.status === "fulfilled" ? reviewResult.value : null);
+    setLoadingReview(false);
+  }
+
+  // Full load: Phase 1 then Phase 2
   async function loadDocument() {
     setLoading(true);
     setError(null);
     try {
-      const doc = await getDocument(docCode);
-      setDocument(doc);
-
-      // Try to load analysis for current version
-      if (doc.versions && doc.versions.length > 0) {
-        const currentVersion = doc.versions[doc.versions.length - 1];
-        try {
-          const anal = await getAnalysis(currentVersion.id);
-          setAnalysis(anal);
-        } catch {
-          setAnalysis(null);
-        }
-        try {
-          const cl = await generateChangelog(currentVersion.id);
-          setChangelog(cl);
-        } catch {
-          setChangelog(null);
-        }
-        try {
-          const chain = await getApprovalChain(currentVersion.id);
-          setApprovalChain(chain);
-        } catch {
-          setApprovalChain(null);
-        }
+      const doc = await loadDocumentOnly();
+      if (doc) {
+        setLoading(false);
+        await loadSecondaryData(doc);
       }
     } catch (err: any) {
       setError(err.message || "Erro ao carregar documento");
@@ -98,6 +157,35 @@ export default function DocumentDetail() {
       setLoading(false);
     }
   }
+
+  // Auto-trigger AI analysis when document is in draft status
+  useEffect(() => {
+    if (
+      document &&
+      document.status === "draft" &&
+      !autoAnalysisTriggered.current &&
+      actionLoading === null
+    ) {
+      const version = document.versions?.[document.versions.length - 1];
+      if (version && version.status === "draft") {
+        autoAnalysisTriggered.current = true;
+        handleAnalyze();
+      }
+    }
+  }, [document]);
+
+  // Auto-polling for documents in processing states
+  useEffect(() => {
+    const processingStatuses = ["draft", "analyzing", "spelling_review", "formatting"];
+    if (document && processingStatuses.includes(document.status)) {
+      pollingRef.current = setInterval(() => {
+        loadDocumentOnly();
+      }, 5000);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [document?.status]);
 
   function getCurrentVersion(): DocumentVersion | null {
     if (!document?.versions || document.versions.length === 0) return null;
@@ -111,6 +199,7 @@ export default function DocumentDetail() {
     try {
       const anal = await analyzeDocument(version.id);
       setAnalysis(anal);
+      showToast("Análise de IA concluída.", "success");
       await loadDocument();
     } catch (err: any) {
       setError(err.message || "Erro ao analisar documento");
@@ -125,6 +214,7 @@ export default function DocumentDetail() {
     setActionLoading("format");
     try {
       await formatDocument(version.id);
+      showToast("Documento formatado com sucesso.", "success");
       await loadDocument();
     } catch (err: any) {
       setError(err.message || "Erro ao formatar documento");
@@ -137,6 +227,7 @@ export default function DocumentDetail() {
     setActionLoading("skip");
     try {
       await skipAiApproval(docCode);
+      showToast("Documento encaminhado para revisão humana.", "info");
       await loadDocument();
     } catch (err: any) {
       setError(err.message || "Erro ao pular aprovacao da IA");
@@ -149,14 +240,52 @@ export default function DocumentDetail() {
     if (!resubmitFile) return;
     setActionLoading("resubmit");
     try {
-      await resubmitDocument(docCode, resubmitFile, "autor");
+      const result = await resubmitDocument(docCode, resubmitFile, "autor", changeSummary);
       setResubmitFile(null);
+      setChangeSummary("");
       setShowResubmit(false);
-      await loadDocument();
+      autoAnalysisTriggered.current = false;
+      showToast("Nova versão enviada com sucesso.", "success");
+      // Redirect to new document code (revision number changes the code)
+      if (result.document.code !== docCode) {
+        router.push(`/autor/${result.document.code}`);
+      } else {
+        await loadDocument();
+      }
     } catch (err: any) {
       setError(err.message || "Erro ao reenviar documento");
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleSubmitTextReview(text: string, skipClarity: boolean) {
+    const version = getCurrentVersion();
+    if (!version) return;
+    setTextReviewLoading(true);
+    try {
+      const newReview = await submitTextReview(version.id, text, skipClarity);
+      setTextReview(newReview);
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro na revisao de texto");
+    } finally {
+      setTextReviewLoading(false);
+    }
+  }
+
+  async function handleAcceptTextReview() {
+    const version = getCurrentVersion();
+    if (!version) return;
+    setTextReviewLoading(true);
+    try {
+      const review = await acceptTextReview(version.id);
+      setTextReview(review);
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro ao aceitar revisao");
+    } finally {
+      setTextReviewLoading(false);
     }
   }
 
@@ -201,9 +330,14 @@ export default function DocumentDetail() {
 
   const currentVersion = getCurrentVersion();
   const isRejected = document.status === "rejected";
+  const isSpellingReview = currentVersion?.status === "spelling_review";
   const isApproved =
-    document.status === "approved" || analysis?.approved === true;
+    (document.status === "approved" || analysis?.approved === true) &&
+    !isSpellingReview;
   const isPendingAnalysis = document.status === "pending_analysis";
+  const isDraft = document.status === "draft";
+  const midProcessingStatuses = ["draft", "analyzing", "spelling_review", "pending_analysis", "formatting", "active", "in_review"];
+  const canUpdate = !midProcessingStatuses.includes(document.status);
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -273,6 +407,22 @@ export default function DocumentDetail() {
                   ))}
                 </div>
               )}
+              {currentVersion?.change_summary && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: "10px 14px",
+                    borderRadius: "var(--radius-md)",
+                    background: "var(--accent-light)",
+                    border: "1px solid var(--accent-border)",
+                    fontSize: 13.5,
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <strong style={{ color: "var(--text-primary)" }}>Motivo da atualização:</strong>{" "}
+                  {currentVersion.change_summary}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -282,7 +432,7 @@ export default function DocumentDetail() {
       <div className="card mb-6">
         <h3 className="section-title">Ações</h3>
         <div className="flex flex-wrap gap-3">
-          {isPendingAnalysis && (
+          {(isPendingAnalysis || isDraft) && (
             <button
               onClick={handleAnalyze}
               disabled={actionLoading !== null}
@@ -308,8 +458,8 @@ export default function DocumentDetail() {
                 Re-submeter
               </button>
               <button
-                onClick={handleSkipAi}
-                disabled={actionLoading !== null}
+                onClick={() => setShowSkipConfirm(true)}
+                disabled={actionLoading !== null || showSkipConfirm}
                 className="btn-secondary"
               >
                 {actionLoading === "skip" ? (
@@ -322,7 +472,19 @@ export default function DocumentDetail() {
             </>
           )}
 
-          {isApproved && (
+          {canUpdate && !isRejected && (
+            <button
+              onClick={() => setShowResubmit(!showResubmit)}
+              disabled={actionLoading !== null}
+              className="btn-secondary"
+            >
+              <Upload size={18} />
+              Nova Versão
+            </button>
+          )}
+
+          {/* Formatar só aparece quando aprovado E ainda sem PDF formatado */}
+          {isApproved && !currentVersion?.formatted_file_path_pdf && (
             <button
               onClick={handleFormat}
               disabled={actionLoading !== null}
@@ -337,18 +499,7 @@ export default function DocumentDetail() {
             </button>
           )}
 
-          {/* Download links */}
-          {currentVersion?.formatted_file_path_docx && (
-            <a
-              href={getExportUrl(currentVersion.id, "docx")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-success"
-            >
-              <FileDown size={18} />
-              Baixar DOCX
-            </a>
-          )}
+          {/* Download PDF — disponível sempre que houver PDF formatado (watermark aplicado automaticamente pelo backend) */}
           {currentVersion?.formatted_file_path_pdf && (
             <a
               href={getExportUrl(currentVersion.id, "pdf")}
@@ -360,18 +511,102 @@ export default function DocumentDetail() {
               Baixar PDF
             </a>
           )}
+
+          {/* Download DOCX — somente após publicação */}
+          {currentVersion?.formatted_file_path_docx && currentVersion?.status === "published" && (
+            <a
+              href={getExportUrl(currentVersion.id, "docx")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-success"
+            >
+              <FileDown size={18} />
+              Baixar DOCX
+            </a>
+          )}
         </div>
+
+        {/* Skip AI confirmation warning */}
+        {showSkipConfirm && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--warning)",
+              background: "rgba(234, 179, 8, 0.06)",
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <p style={{ fontSize: 13.5, color: "var(--text-primary)", fontWeight: 600, marginBottom: 8 }}>
+                  Atenção
+                </p>
+                <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginBottom: 12 }}>
+                  Ao prosseguir sem aprovação da IA, o documento seguirá para revisão humana sem passar pelas verificações automáticas de conformidade.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowSkipConfirm(false);
+                      handleSkipAi();
+                    }}
+                    disabled={actionLoading !== null}
+                    className="btn-primary"
+                    style={{ fontSize: 13 }}
+                  >
+                    {actionLoading === "skip" ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : null}
+                    Confirmar
+                  </button>
+                  <button
+                    onClick={() => setShowSkipConfirm(false)}
+                    className="btn-secondary"
+                    style={{ fontSize: 13 }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Resubmit form */}
+      {/* Resubmit / Update form */}
       {showResubmit && (
         <div className="card mb-6">
           <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", marginBottom: 16 }}>
-            Re-submeter Documento
+            {isRejected ? "Re-submeter Documento" : "Atualizar Documento — Nova Versão"}
           </h3>
           <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginBottom: 16 }}>
-            Selecione uma nova versão do arquivo para reanálise.
+            {isRejected
+              ? "Selecione uma nova versão do arquivo para reanálise."
+              : "Envie uma nova versão do documento. A versão atual será arquivada."}
           </p>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6 }}>
+              Motivo da Atualização
+            </label>
+            <textarea
+              value={changeSummary}
+              onChange={(e) => setChangeSummary(e.target.value)}
+              placeholder="Descreva brevemente o que mudou nesta versão..."
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-md)",
+                fontSize: 13,
+                resize: "vertical",
+                background: "var(--bg-main)",
+                color: "var(--text-primary)",
+              }}
+            />
+          </div>
           <DocumentUpload
             onFileSelect={setResubmitFile}
             selectedFile={resubmitFile}
@@ -395,6 +630,7 @@ export default function DocumentDetail() {
               onClick={() => {
                 setShowResubmit(false);
                 setResubmitFile(null);
+                setChangeSummary("");
               }}
               className="btn-secondary"
             >
@@ -405,7 +641,13 @@ export default function DocumentDetail() {
       )}
 
       {/* Approval Chain - show if exists */}
-      {approvalChain && (
+      {loadingChain && (
+        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
+          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando cadeia de aprovação...</span>
+        </div>
+      )}
+      {!loadingChain && approvalChain && (
         <div className="mb-6">
           <ApprovalChainView
             chain={approvalChain}
@@ -415,7 +657,8 @@ export default function DocumentDetail() {
       )}
 
       {/* Approval Setup - show when AI approved and no chain yet */}
-      {currentVersion &&
+      {!loadingChain &&
+        currentVersion &&
         (isApproved || document.status === "in_review") &&
         !approvalChain && (
           <div className="mb-6">
@@ -428,14 +671,44 @@ export default function DocumentDetail() {
         )}
 
       {/* AI Analysis */}
-      {analysis && (
+      {loadingAnalysis && (
+        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
+          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando análise da IA...</span>
+        </div>
+      )}
+      {!loadingAnalysis && analysis && (
         <div className="mb-6">
           <AIFeedback analysis={analysis} />
         </div>
       )}
 
+      {/* Text Review Panel — spelling/clarity loop */}
+      {loadingReview && (
+        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
+          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando revisão de texto...</span>
+        </div>
+      )}
+      {!loadingReview && textReview && textReview.status !== "clean" && (
+        <div className="mb-6">
+          <TextReviewPanel
+            review={textReview}
+            onSubmitText={handleSubmitTextReview}
+            onAccept={handleAcceptTextReview}
+            loading={textReviewLoading}
+          />
+        </div>
+      )}
+
       {/* Changelog */}
-      {changelog && (
+      {loadingChangelog && (
+        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
+          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando changelog...</span>
+        </div>
+      )}
+      {!loadingChangelog && changelog && (
         <div className="mb-6">
           <ChangelogViewer changelog={changelog} />
         </div>
@@ -464,6 +737,7 @@ export default function DocumentDetail() {
                   <th>Versão</th>
                   <th>Status</th>
                   <th>IA</th>
+                  <th>Motivo</th>
                   <th>Data</th>
                 </tr>
               </thead>
@@ -493,6 +767,11 @@ export default function DocumentDetail() {
                       )}
                     </td>
                     <td>
+                      <span style={{ color: "var(--text-secondary)", fontSize: 12.5 }}>
+                        {v.change_summary || "—"}
+                      </span>
+                    </td>
+                    <td>
                       <span style={{ color: "var(--text-secondary)" }}>
                         {formatDateTime(v.submitted_at)}
                       </span>
@@ -501,6 +780,101 @@ export default function DocumentDetail() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Activity timeline */}
+      {(analysis || approvalChain) && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 16 }}>
+            <Clock size={20} style={{ color: "var(--accent)" }} />
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
+              Linha do Tempo
+            </h3>
+          </div>
+          <div style={{ position: "relative", paddingLeft: 24 }}>
+            {/* Vertical connector line */}
+            <div style={{
+              position: "absolute",
+              left: 7,
+              top: 8,
+              bottom: 8,
+              width: 2,
+              background: "var(--border)",
+            }} />
+            {[
+              document && {
+                label: "Documento submetido",
+                date: document.created_at,
+                color: "var(--accent)",
+              },
+              analysis && {
+                label: analysis.approved ? "IA aprovou o documento" : "IA identificou problemas no documento",
+                date: analysis.created_at,
+                color: analysis.approved ? "var(--success)" : "var(--danger)",
+              },
+              ...(textReview ? [{
+                label: textReview.status === "clean"
+                  ? "Revisão ortográfica concluída — sem erros"
+                  : "Revisão ortográfica realizada",
+                date: textReview.created_at,
+                color: "var(--accent)",
+              }] : []),
+              approvalChain && {
+                label: `Cadeia de aprovação criada (${approvalChain.approvers?.length ?? 0} aprovadores)`,
+                date: approvalChain.created_at,
+                color: "var(--accent)",
+              },
+              ...(approvalChain?.approvers ?? [])
+                .filter((a: any) => a.acted_at)
+                .map((a: any) => ({
+                  label: `${a.approver_name} ${a.action === "approve" ? "aprovou" : "rejeitou"}${a.comments ? `: "${a.comments}"` : ""}`,
+                  date: a.acted_at,
+                  color: a.action === "approve" ? "var(--success)" : "var(--danger)",
+                })),
+              approvalChain?.status === "approved" && {
+                label: "Documento aprovado e publicado",
+                date: approvalChain.completed_at || approvalChain.created_at,
+                color: "var(--success)",
+              },
+              approvalChain?.status === "rejected" && {
+                label: "Documento rejeitado pela cadeia de aprovação",
+                date: approvalChain.completed_at || approvalChain.created_at,
+                color: "var(--danger)",
+              },
+            ]
+              .filter(Boolean)
+              .sort((a: any, b: any) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
+              .map((event: any, idx: number) => (
+                <div key={idx} style={{ display: "flex", gap: 12, marginBottom: 16, position: "relative" }}>
+                  <div style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    background: event.color,
+                    border: "3px solid var(--bg-card)",
+                    marginTop: 2,
+                  }} />
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                      {event.label}
+                    </p>
+                    {event.date && (
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                        {new Date(event.date).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}
