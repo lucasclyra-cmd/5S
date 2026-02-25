@@ -12,6 +12,7 @@ class DocumentTemplate(Base):
     description = Column(String(500), nullable=True)
     document_type = Column(String(10), nullable=False, index=True)  # PQ, IT, RQ
     template_file_path = Column(String(500), nullable=False)
+    docx_file_path = Column(String(500), nullable=True)  # Pre-converted .docx for .odt templates
     is_active = Column(Boolean, default=True)
     section_mapping = Column(JSON, nullable=True)  # Maps placeholder → section
     header_config = Column(JSON, nullable=True)  # Header field positions

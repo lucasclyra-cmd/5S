@@ -66,19 +66,22 @@ async def _seed_default_templates():
             dest_path = os.path.join(templates_dir, dest_filename)
             shutil.copy2(source_path, dest_path)
 
-            # Extract placeholders
+            # Convert .odt → .docx eagerly so formatting always has a native .docx
+            docx_path = dest_path
             section_mapping = None
             try:
-                preview_path = dest_path
                 if ext.lower() == ".odt":
                     temp_dir = os.path.join(settings.STORAGE_PATH, "temp")
                     os.makedirs(temp_dir, exist_ok=True)
-                    preview_path = convert_odt_to_docx(dest_path, temp_dir)
-                placeholders = find_placeholders(preview_path)
+                    converted = convert_odt_to_docx(dest_path, temp_dir)
+                    docx_name = f"{doc_type}_padrao.docx"
+                    docx_path = os.path.join(templates_dir, docx_name)
+                    shutil.move(converted, docx_path)
+                placeholders = find_placeholders(docx_path)
                 section_mapping = {"placeholders": placeholders}
                 logger.info(f"Template {doc_type}: {len(placeholders)} placeholders encontrados")
             except Exception as e:
-                logger.warning(f"Erro ao extrair placeholders do template {doc_type}: {e}")
+                logger.warning(f"Erro ao processar template {doc_type}: {e}")
                 section_mapping = {"placeholders": []}
 
             template = DocumentTemplate(
@@ -86,6 +89,7 @@ async def _seed_default_templates():
                 description=f"Template padrão para documentos {doc_type} (carregado automaticamente)",
                 document_type=doc_type,
                 template_file_path=dest_path,
+                docx_file_path=docx_path,
                 is_active=True,
                 section_mapping=section_mapping,
             )
@@ -117,10 +121,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware - allow all origins for development
+# CORS middleware - restrict to allowed origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

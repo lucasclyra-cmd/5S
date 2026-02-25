@@ -7,6 +7,9 @@ from app.models.workflow import WorkflowQueue
 from app.models.master_list import MasterListEntry
 from app.models.approval import ApprovalChain, ApprovalChainApprover, DefaultApprover
 from app.models.template import DocumentTemplate
+from app.models.text_review import TextReview
+from app.models.distribution import DocumentDistribution
+from app.models.ai_usage_log import AIUsageLog
 
 __all__ = [
     "AdminConfig",
@@ -23,4 +26,7 @@ __all__ = [
     "ApprovalChainApprover",
     "DefaultApprover",
     "DocumentTemplate",
+    "TextReview",
+    "DocumentDistribution",
+    "AIUsageLog",
 ]

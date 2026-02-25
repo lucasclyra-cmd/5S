@@ -31,6 +31,9 @@ class Document(Base):
     revision_number = Column(Integer, default=0)  # .00, .01, .02
     sector = Column(String(200), nullable=True)  # Setor responsável
     effective_date = Column(DateTime(timezone=True), nullable=True)  # Data em vigor
+    review_due_date = Column(DateTime(timezone=True), nullable=True)  # Próxima revisão obrigatória
+    retention_years = Column(Integer, nullable=True)  # Anos de retenção após obsolescência
+    confidentiality_level = Column(String(20), nullable=True, default="interno")  # publico/interno/restrito/confidencial
 
     category = relationship("Category", back_populates="documents")
     versions = relationship(

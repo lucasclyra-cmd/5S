@@ -19,8 +19,13 @@ class DocumentVersion(Base):
     # status values: draft, analyzing, in_review, formatting, approved, rejected, archived
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     archived_at = Column(DateTime(timezone=True), nullable=True)
+    change_summary = Column(Text, nullable=True)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    obsolete_at = Column(DateTime(timezone=True), nullable=True)
+    # status values: draft, analyzing, spelling_review, in_review, formatting, approved, published, rejected, archived, obsolete
 
     document = relationship("Document", back_populates="versions")
     analyses = relationship("AIAnalysis", back_populates="version", order_by="AIAnalysis.created_at")
     changelogs = relationship("Changelog", back_populates="version")
     workflow_items = relationship("WorkflowQueue", back_populates="version")
+    text_reviews = relationship("TextReview", back_populates="version", order_by="TextReview.iteration")

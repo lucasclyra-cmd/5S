@@ -34,6 +34,8 @@ class ApprovalChainApprover(Base):
     is_required = Column(Boolean, default=True)
     ai_recommended = Column(Boolean, default=False)
     acted_at = Column(DateTime(timezone=True), nullable=True)
+    deadline = Column(DateTime(timezone=True), nullable=True)
+    approval_level = Column(Integer, nullable=False, default=0)  # Aprovadores do mesmo nível agem em paralelo
 
     chain = relationship("ApprovalChain", back_populates="approvers")
 
