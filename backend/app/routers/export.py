@@ -13,6 +13,35 @@ from app.services import versioning_service
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+def _add_pending_watermark(input_pdf_path: str) -> str:
+    """Add an orange diagonal 'AGUARDANDO ANÁLISE' watermark to all pages of a PDF.
+    Returns path to a temporary watermarked PDF file.
+    """
+    doc = fitz.open(input_pdf_path)
+    watermark_text = "AGUARDANDO ANÁLISE"
+
+    for page in doc:
+        rect = page.rect
+        center_x = rect.width / 2
+        center_y = rect.height / 2
+        page.insert_text(
+            fitz.Point(center_x - 200, center_y + 30),
+            watermark_text,
+            fontname="Helvetica-Bold",
+            fontsize=50,
+            color=(0.95, 0.55, 0.0),  # Laranja
+            rotate=45,
+            overlay=True,
+        )
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp_path = tmp.name
+    tmp.close()
+    doc.save(tmp_path)
+    doc.close()
+    return tmp_path
+
+
 def _add_obsolete_watermark(input_pdf_path: str) -> str:
     """Add a red diagonal 'VERSÃO DESATUALIZADA' watermark to all pages of a PDF.
     Returns path to a temporary watermarked PDF file.
@@ -49,12 +78,15 @@ async def download_docx(version_id: int, db: AsyncSession = Depends(get_db)):
     if version is None:
         raise HTTPException(status_code=404, detail=f"Version {version_id} not found")
 
+    if version.status != "published":
+        raise HTTPException(
+            status_code=403,
+            detail="Download do DOCX disponível apenas após a publicação do documento.",
+        )
+
     file_path = version.formatted_file_path_docx
     if not file_path or not os.path.isfile(file_path):
-        # Fall back to original file if formatted version doesn't exist
-        file_path = version.original_file_path
-        if not file_path or not os.path.isfile(file_path):
-            raise HTTPException(status_code=404, detail="No file available for download")
+        raise HTTPException(status_code=404, detail="No file available for download")
 
     filename = f"{version.document.code}_v{version.version_number}.docx"
     return FileResponse(
@@ -83,6 +115,15 @@ async def download_pdf(version_id: int, db: AsyncSession = Depends(get_db)):
 
     if version.status in ("archived", "obsolete"):
         watermarked_path = _add_obsolete_watermark(file_path)
+        return FileResponse(
+            path=watermarked_path,
+            filename=filename,
+            media_type="application/pdf",
+            background=BackgroundTask(os.unlink, watermarked_path),
+        )
+
+    if version.status != "published":
+        watermarked_path = _add_pending_watermark(file_path)
         return FileResponse(
             path=watermarked_path,
             filename=filename,
