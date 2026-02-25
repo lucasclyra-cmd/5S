@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import fitz  # PyMuPDF
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.background import BackgroundTask
+from starlette.background import BackgroundTask
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
