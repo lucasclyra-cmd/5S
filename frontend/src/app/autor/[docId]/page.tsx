@@ -17,12 +17,16 @@ import {
   FileDown,
   History,
   Upload,
+  ChevronDown,
+  ChevronRight,
+  Users,
 } from "lucide-react";
 import {
   getDocument,
   getAnalysis,
   formatDocument,
   skipAiApproval,
+  retryAnalysis,
   resubmitDocument,
   getChangelog,
   generateChangelog,
@@ -44,10 +48,11 @@ import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 import UnifiedAnalysisPanel from "@/components/UnifiedAnalysisPanel";
 import ChangelogViewer from "@/components/ChangelogViewer";
-import DocumentPreview from "@/components/DocumentPreview";
 import DocumentUpload from "@/components/DocumentUpload";
 import ApproverSelector from "@/components/ApproverSelector";
 import ApprovalChainView from "@/components/ApprovalChain";
+import ProgressStepper from "@/components/ProgressStepper";
+import SafetyNote from "@/components/SafetyNote";
 import { useToast } from "@/lib/toast-context";
 
 export default function DocumentDetail() {
@@ -59,6 +64,7 @@ export default function DocumentDetail() {
   const [document, setDocument] = useState<DocumentWithVersions | null>(null);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [changelog, setChangelog] = useState<Changelog | null>(null);
+  const [currentVersionNumber, setCurrentVersionNumber] = useState<number>(1);
   const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
@@ -73,13 +79,14 @@ export default function DocumentDetail() {
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [textReview, setTextReview] = useState<TextReview | null>(null);
   const [textReviewLoading, setTextReviewLoading] = useState(false);
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
+  const [showLegacyChainSetup, setShowLegacyChainSetup] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadDocument();
   }, [docCode]);
 
-  // Phase 1: Fetch the document and render the header immediately
   async function loadDocumentOnly() {
     try {
       const doc = await getDocument(docCode);
@@ -91,10 +98,10 @@ export default function DocumentDetail() {
     }
   }
 
-  // Phase 2: Fetch secondary data in parallel
   async function loadSecondaryData(doc: DocumentWithVersions) {
     if (!doc.versions || doc.versions.length === 0) return;
     const currentVersion = doc.versions[doc.versions.length - 1];
+    setCurrentVersionNumber(currentVersion.version_number);
 
     setLoadingAnalysis(true);
     setLoadingChangelog(true);
@@ -119,7 +126,9 @@ export default function DocumentDetail() {
     const [analysisResult, changelogResult, chainResult, reviewResult] =
       await Promise.allSettled([
         getAnalysis(currentVersion.id),
-        fetchChangelog(currentVersion.id),
+        currentVersion.version_number > 1
+          ? fetchChangelog(currentVersion.id)
+          : Promise.resolve(null),
         getApprovalChain(currentVersion.id),
         getTextReview(currentVersion.id),
       ]);
@@ -137,7 +146,6 @@ export default function DocumentDetail() {
     setLoadingReview(false);
   }
 
-  // Full load: Phase 1 then Phase 2
   async function loadDocument() {
     setLoading(true);
     setError(null);
@@ -155,8 +163,23 @@ export default function DocumentDetail() {
   }
 
   // Auto-polling for documents in processing states
+  // When status transitions out of processing, reload secondary data
+  const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     const processingStatuses = ["analyzing", "spelling_review", "formatting"];
+    const currentStatus = document?.status;
+
+    // If status transitioned from processing to non-processing, reload all data
+    if (
+      prevStatusRef.current &&
+      processingStatuses.includes(prevStatusRef.current) &&
+      currentStatus &&
+      !processingStatuses.includes(currentStatus)
+    ) {
+      loadSecondaryData(document!);
+    }
+    prevStatusRef.current = currentStatus;
+
     if (document && processingStatuses.includes(document.status)) {
       pollingRef.current = setInterval(() => {
         loadDocumentOnly();
@@ -194,7 +217,20 @@ export default function DocumentDetail() {
       showToast("Documento encaminhado para revisão humana.", "info");
       await loadDocument();
     } catch (err: any) {
-      setError(err.message || "Erro ao pular aprovacao da IA");
+      setError(err.message || "Erro ao pular aprovação da IA");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleRetryAnalysis() {
+    setActionLoading("retry");
+    try {
+      await retryAnalysis(docCode);
+      showToast("Análise reiniciada.", "info");
+      await loadDocument();
+    } catch (err: any) {
+      setError(err.message || "Erro ao reiniciar análise");
     } finally {
       setActionLoading(null);
     }
@@ -209,7 +245,6 @@ export default function DocumentDetail() {
       setChangeSummary("");
       setShowResubmit(false);
       showToast("Nova versão enviada com sucesso.", "success");
-      // Redirect to new document code (revision number changes the code)
       if (result.document.code !== docCode) {
         router.push(`/autor/${result.document.code}`);
       } else {
@@ -231,7 +266,7 @@ export default function DocumentDetail() {
       setTextReview(newReview);
       await loadDocument();
     } catch (err: any) {
-      setError(err.message || "Erro na revisao de texto");
+      setError(err.message || "Erro na revisão de texto");
     } finally {
       setTextReviewLoading(false);
     }
@@ -246,7 +281,7 @@ export default function DocumentDetail() {
       setTextReview(review);
       await loadDocument();
     } catch (err: any) {
-      setError(err.message || "Erro ao aceitar revisao");
+      setError(err.message || "Erro ao aceitar revisão");
     } finally {
       setTextReviewLoading(false);
     }
@@ -293,15 +328,26 @@ export default function DocumentDetail() {
 
   const currentVersion = getCurrentVersion();
   const isRejected = document.status === "rejected";
+  const isAnalysisFailed = document.status === "analysis_failed";
+  const isAnalyzing = document.status === "analyzing" || document.status === "draft";
   const isSpellingReview = currentVersion?.status === "spelling_review";
   const isApproved =
     (document.status === "approved" || analysis?.approved === true) &&
     !isSpellingReview;
   const midProcessingStatuses = ["draft", "analyzing", "spelling_review", "pending_analysis", "formatting", "active", "in_review"];
   const canUpdate = !midProcessingStatuses.includes(document.status);
+  const needsChainSetup = !loadingChain && currentVersion && (isApproved || document.status === "in_review") && !approvalChain;
+
+  // Elapsed time since submission (for analyzing state)
+  const elapsedSeconds = currentVersion?.submitted_at
+    ? Math.floor((Date.now() - new Date(currentVersion.submitted_at).getTime()) / 1000)
+    : 0;
+  const elapsedDisplay = elapsedSeconds > 60
+    ? `${Math.floor(elapsedSeconds / 60)}min ${elapsedSeconds % 60}s`
+    : `${elapsedSeconds}s`;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-6xl mx-auto">
       {/* Back link */}
       <Link
         href="/autor"
@@ -327,166 +373,144 @@ export default function DocumentDetail() {
         </div>
       )}
 
-      {/* Document header */}
+      {/* ═══ UNIFIED HEADER + ACTIONS ═══ */}
       <div className="card mb-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-4">
-            <div
-              className="flex items-center justify-center"
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: "var(--radius-md)",
-                background: "var(--accent-light)",
-                border: "1px solid var(--accent-border)",
-              }}
-            >
-              <FileText size={24} style={{ color: "var(--accent)" }} />
+        <div className="flex items-start gap-4">
+          <div
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "var(--radius-md)",
+              background: "var(--accent-light)",
+              border: "1px solid var(--accent-border)",
+            }}
+          >
+            <FileText size={24} style={{ color: "var(--accent)" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
+              <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: "var(--text-primary)" }}>
+                {document.title}
+              </h1>
+              <StatusBadge status={document.status} />
             </div>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: "var(--text-primary)" }}>
-                  {document.title}
-                </h1>
-                <StatusBadge status={document.status} />
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ fontSize: 13.5, color: "var(--text-secondary)" }}>
-                <span>
-                  Código: <strong style={{ color: "var(--text-primary)" }}>{document.code}</strong>
-                </span>
-                <span>
-                  Versão: <strong style={{ color: "var(--text-primary)" }}>v{document.current_version}</strong>
-                </span>
-                <span>Criado em: {formatDateTime(document.created_at)}</span>
-              </div>
-              {document.tags && document.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {document.tags.map((tag) => (
-                    <span key={tag} className="chip">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {currentVersion?.change_summary && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    padding: "10px 14px",
-                    borderRadius: "var(--radius-md)",
-                    background: "var(--accent-light)",
-                    border: "1px solid var(--accent-border)",
-                    fontSize: 13.5,
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  <strong style={{ color: "var(--text-primary)" }}>Motivo da atualização:</strong>{" "}
-                  {currentVersion.change_summary}
-                </div>
-              )}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1" style={{ fontSize: 13.5, color: "var(--text-secondary)" }}>
+              <span>
+                Código: <strong style={{ color: "var(--text-primary)" }}>{document.code}</strong>
+              </span>
+              <span>
+                Versão: <strong style={{ color: "var(--text-primary)" }}>v{document.current_version}</strong>
+              </span>
+              <span>Criado em: {formatDateTime(document.created_at)}</span>
             </div>
+            {document.tags && document.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {document.tags.map((tag) => (
+                  <span key={tag} className="chip">{tag}</span>
+                ))}
+              </div>
+            )}
+            {currentVersion?.change_summary && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--accent-light)",
+                  border: "1px solid var(--accent-border)",
+                  fontSize: 13.5,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                <strong style={{ color: "var(--text-primary)" }}>Motivo da atualização:</strong>{" "}
+                {currentVersion.change_summary}
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Action buttons */}
-      <div className="card mb-6">
-        <h3 className="section-title">Ações</h3>
-        <div className="flex flex-wrap gap-3">
-          {(document.status === "analyzing" || document.status === "draft") && (
-            <div className="flex items-center gap-2" style={{
-              padding: "10px 14px",
-              borderRadius: "var(--radius-md)",
-              background: "rgba(59, 130, 246, 0.06)",
-              border: "1px solid rgba(59, 130, 246, 0.15)",
-              fontSize: 13.5,
-              color: "var(--text-secondary)",
-            }}>
-              <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
-              <span>A análise de IA está sendo executada automaticamente. Aguarde...</span>
-            </div>
-          )}
+        {/* Action buttons inline */}
+        {!isAnalyzing && !isAnalysisFailed && (
+          <div className="flex flex-wrap gap-3 mt-5 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
+            {isRejected && (
+              <>
+                <button
+                  onClick={() => setShowResubmit(!showResubmit)}
+                  disabled={actionLoading !== null}
+                  className="btn-primary"
+                >
+                  <RefreshCw size={18} />
+                  Re-submeter
+                </button>
+                <button
+                  onClick={() => setShowSkipConfirm(true)}
+                  disabled={actionLoading !== null || showSkipConfirm}
+                  className="btn-secondary"
+                >
+                  {actionLoading === "skip" ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <SkipForward size={18} />
+                  )}
+                  Prosseguir sem IA
+                </button>
+              </>
+            )}
 
-          {isRejected && (
-            <>
+            {canUpdate && !isRejected && (
               <button
                 onClick={() => setShowResubmit(!showResubmit)}
                 disabled={actionLoading !== null}
-                className="btn-primary"
-              >
-                <RefreshCw size={18} />
-                Re-submeter
-              </button>
-              <button
-                onClick={() => setShowSkipConfirm(true)}
-                disabled={actionLoading !== null || showSkipConfirm}
                 className="btn-secondary"
               >
-                {actionLoading === "skip" ? (
+                <Upload size={18} />
+                Nova Versão
+              </button>
+            )}
+
+            {isApproved && !currentVersion?.formatted_file_path_pdf && (
+              <button
+                onClick={handleFormat}
+                disabled={actionLoading !== null}
+                className="btn-primary"
+              >
+                {actionLoading === "format" ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
-                  <SkipForward size={18} />
+                  <Paintbrush size={18} />
                 )}
-                Prosseguir sem aprovação da IA
+                Formatar Documento
               </button>
-            </>
-          )}
+            )}
 
-          {canUpdate && !isRejected && (
-            <button
-              onClick={() => setShowResubmit(!showResubmit)}
-              disabled={actionLoading !== null}
-              className="btn-secondary"
-            >
-              <Upload size={18} />
-              Nova Versão
-            </button>
-          )}
+            {currentVersion?.formatted_file_path_pdf && (
+              <a
+                href={getExportUrl(currentVersion.id, "pdf")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-success"
+              >
+                <FileDown size={18} />
+                Baixar PDF
+              </a>
+            )}
 
-          {/* Formatar só aparece quando aprovado E ainda sem PDF formatado */}
-          {isApproved && !currentVersion?.formatted_file_path_pdf && (
-            <button
-              onClick={handleFormat}
-              disabled={actionLoading !== null}
-              className="btn-primary"
-            >
-              {actionLoading === "format" ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Paintbrush size={18} />
-              )}
-              Formatar Documento
-            </button>
-          )}
+            {currentVersion?.formatted_file_path_docx && currentVersion?.status === "published" && (
+              <a
+                href={getExportUrl(currentVersion.id, "docx")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-success"
+              >
+                <FileDown size={18} />
+                Baixar DOCX
+              </a>
+            )}
+          </div>
+        )}
 
-          {/* Download PDF — disponível sempre que houver PDF formatado (watermark aplicado automaticamente pelo backend) */}
-          {currentVersion?.formatted_file_path_pdf && (
-            <a
-              href={getExportUrl(currentVersion.id, "pdf")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-success"
-            >
-              <FileDown size={18} />
-              Baixar PDF
-            </a>
-          )}
-
-          {/* Download DOCX — somente após publicação */}
-          {currentVersion?.formatted_file_path_docx && currentVersion?.status === "published" && (
-            <a
-              href={getExportUrl(currentVersion.id, "docx")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-success"
-            >
-              <FileDown size={18} />
-              Baixar DOCX
-            </a>
-          )}
-        </div>
-
-        {/* Skip AI confirmation warning */}
+        {/* Skip AI confirmation */}
         {showSkipConfirm && (
           <div
             style={{
@@ -504,28 +528,19 @@ export default function DocumentDetail() {
                   Atenção
                 </p>
                 <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginBottom: 12 }}>
-                  Ao prosseguir sem aprovação da IA, o documento seguirá para revisão humana sem passar pelas verificações automáticas de conformidade.
+                  Ao prosseguir sem aprovação da IA, o documento seguirá para revisão humana sem verificações automáticas.
                 </p>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => {
-                      setShowSkipConfirm(false);
-                      handleSkipAi();
-                    }}
+                    onClick={() => { setShowSkipConfirm(false); handleSkipAi(); }}
                     disabled={actionLoading !== null}
                     className="btn-primary"
                     style={{ fontSize: 13 }}
                   >
-                    {actionLoading === "skip" ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : null}
+                    {actionLoading === "skip" ? <Loader2 size={16} className="animate-spin" /> : null}
                     Confirmar
                   </button>
-                  <button
-                    onClick={() => setShowSkipConfirm(false)}
-                    className="btn-secondary"
-                    style={{ fontSize: 13 }}
-                  >
+                  <button onClick={() => setShowSkipConfirm(false)} className="btn-secondary" style={{ fontSize: 13 }}>
                     Cancelar
                   </button>
                 </div>
@@ -535,7 +550,117 @@ export default function DocumentDetail() {
         )}
       </div>
 
-      {/* Resubmit / Update form */}
+      {/* ═══ PROGRESS STEPPER ═══ */}
+      <div className="mb-6">
+        <ProgressStepper status={document.status} />
+      </div>
+
+      {/* ═══ ANALYZING STATE ═══ */}
+      {isAnalyzing && (
+        <div
+          className="card mb-6"
+          style={{
+            background: "linear-gradient(135deg, rgba(59, 130, 246, 0.04), rgba(99, 102, 241, 0.04))",
+            border: "1px solid rgba(59, 130, 246, 0.15)",
+          }}
+        >
+          <div className="flex items-center gap-4">
+            <Loader2 size={32} className="animate-spin flex-shrink-0" style={{ color: "var(--accent)" }} />
+            <div className="flex-1">
+              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+                Análise de IA em andamento
+              </p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>
+                O sistema está analisando completude, conformidade, ortografia e clareza.
+                Isso geralmente leva de 30 segundos a 2 minutos.
+              </p>
+              {elapsedSeconds > 0 && (
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                  Tempo decorrido: {elapsedDisplay}
+                </p>
+              )}
+            </div>
+          </div>
+          {/* Indeterminate progress bar */}
+          <div
+            style={{
+              marginTop: 16,
+              height: 4,
+              borderRadius: 2,
+              background: "rgba(59, 130, 246, 0.1)",
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                height: "100%",
+                width: "40%",
+                background: "var(--accent)",
+                borderRadius: 2,
+                animation: "indeterminate-progress 1.5s ease-in-out infinite",
+              }}
+            />
+          </div>
+          <style>{`
+            @keyframes indeterminate-progress {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(350%); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* ═══ ANALYSIS FAILED STATE ═══ */}
+      {isAnalysisFailed && (
+        <div
+          className="card mb-6"
+          style={{
+            border: "1px solid rgba(201, 69, 62, 0.2)",
+            background: "rgba(201, 69, 62, 0.04)",
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle size={24} style={{ color: "var(--danger)", flexShrink: 0, marginTop: 2 }} />
+            <div className="flex-1">
+              <p style={{ fontWeight: 600, fontSize: 15, color: "var(--text-primary)" }}>
+                A análise de IA falhou
+              </p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+                Houve um erro durante a análise automática. Você pode tentar novamente ou
+                prosseguir sem a aprovação da IA.
+              </p>
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={handleRetryAnalysis}
+                  disabled={actionLoading !== null}
+                  className="btn-primary"
+                >
+                  {actionLoading === "retry" ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={18} />
+                  )}
+                  Tentar novamente
+                </button>
+                <button
+                  onClick={() => setShowSkipConfirm(true)}
+                  disabled={actionLoading !== null}
+                  className="btn-secondary"
+                >
+                  <SkipForward size={18} />
+                  Prosseguir sem IA
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ RESUBMIT FORM ═══ */}
       {showResubmit && (
         <div className="card mb-6">
           <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", marginBottom: 16 }}>
@@ -587,11 +712,7 @@ export default function DocumentDetail() {
               Enviar nova versão
             </button>
             <button
-              onClick={() => {
-                setShowResubmit(false);
-                setResubmitFile(null);
-                setChangeSummary("");
-              }}
+              onClick={() => { setShowResubmit(false); setResubmitFile(null); setChangeSummary(""); }}
               className="btn-secondary"
             >
               Cancelar
@@ -600,231 +721,236 @@ export default function DocumentDetail() {
         </div>
       )}
 
-      {/* Approval Chain - show if exists */}
-      {loadingChain && (
-        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
-          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando cadeia de aprovação...</span>
-        </div>
-      )}
-      {!loadingChain && approvalChain && (
-        <div className="mb-6">
-          <ApprovalChainView
-            chain={approvalChain}
-            onUpdate={setApprovalChain}
-          />
-        </div>
-      )}
+      {/* ═══ TWO-COLUMN LAYOUT ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column — main content (2/3) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* AI Analysis Panel */}
+          {(loadingAnalysis || loadingReview) && (
+            <div className="card flex items-center gap-2" style={{ padding: 16 }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando análise da IA...</span>
+            </div>
+          )}
+          {!loadingAnalysis && !loadingReview && (analysis || textReview) && (
+            <UnifiedAnalysisPanel
+              analysis={analysis}
+              textReview={textReview}
+              onSubmitText={handleSubmitTextReview}
+              onAccept={handleAcceptTextReview}
+              textReviewLoading={textReviewLoading}
+              mode="autor"
+            />
+          )}
 
-      {/* Approval Setup - show when AI approved and no chain yet */}
-      {!loadingChain &&
-        currentVersion &&
-        (isApproved || document.status === "in_review") &&
-        !approvalChain && (
-          <div className="mb-6">
+          {/* Changelog — only for v2+ (document updates, not new documents) */}
+          {currentVersionNumber > 1 && loadingChangelog && (
+            <div className="card flex items-center gap-2" style={{ padding: 16 }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando alterações...</span>
+            </div>
+          )}
+          {currentVersionNumber > 1 && !loadingChangelog && changelog && (
+            <ChangelogViewer changelog={changelog} />
+          )}
+        </div>
+
+        {/* Right column — sidebar (1/3) */}
+        <div className="space-y-6">
+          {/* Approval Chain View */}
+          {loadingChain && (
+            <div className="card flex items-center gap-2" style={{ padding: 16 }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando aprovação...</span>
+            </div>
+          )}
+          {!loadingChain && approvalChain && (
+            <ApprovalChainView chain={approvalChain} onUpdate={setApprovalChain} />
+          )}
+
+          {/* Legacy: No chain configured — show setup button */}
+          {needsChainSetup && !showLegacyChainSetup && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={18} style={{ color: "var(--accent)" }} />
+                <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+                  Cadeia de Aprovação
+                </h4>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                Este documento ainda não possui uma cadeia de aprovação configurada.
+              </p>
+              <button
+                onClick={() => setShowLegacyChainSetup(true)}
+                className="btn-primary w-full justify-center"
+              >
+                <Users size={16} />
+                Configurar Cadeia de Aprovação
+              </button>
+            </div>
+          )}
+          {needsChainSetup && showLegacyChainSetup && currentVersion && (
             <ApproverSelector
               versionId={currentVersion.id}
               documentType={document.document_type}
-              onChainCreated={loadDocument}
+              onChainCreated={() => { setShowLegacyChainSetup(false); loadDocument(); }}
             />
-          </div>
-        )}
+          )}
 
-      {/* Unified AI Analysis Panel */}
-      {(loadingAnalysis || loadingReview) && (
-        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
-          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando análise da IA...</span>
-        </div>
-      )}
-      {!loadingAnalysis && !loadingReview && (analysis || textReview) && (
-        <div className="mb-6">
-          <UnifiedAnalysisPanel
-            analysis={analysis}
-            textReview={textReview}
-            onSubmitText={handleSubmitTextReview}
-            onAccept={handleAcceptTextReview}
-            textReviewLoading={textReviewLoading}
-            mode="autor"
-          />
-        </div>
-      )}
+          {/* Safety Note */}
+          {currentVersion && !isAnalyzing && !isAnalysisFailed && (
+            <SafetyNote versionId={currentVersion.id} />
+          )}
 
-      {/* Changelog */}
-      {loadingChangelog && (
-        <div className="card mb-6 flex items-center gap-2" style={{ padding: 16 }}>
-          <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Carregando changelog...</span>
-        </div>
-      )}
-      {!loadingChangelog && changelog && (
-        <div className="mb-6">
-          <ChangelogViewer changelog={changelog} />
-        </div>
-      )}
-
-      {/* Document preview */}
-      {currentVersion?.extracted_text && (
-        <div className="mb-6">
-          <DocumentPreview text={currentVersion.extracted_text} />
-        </div>
-      )}
-
-      {/* Version history */}
-      {document.versions && document.versions.length > 0 && (
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <History size={20} style={{ color: "var(--accent)" }} />
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
-              Histórico de Versões
-            </h3>
-          </div>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Versão</th>
-                  <th>Status</th>
-                  <th>IA</th>
-                  <th>Motivo</th>
-                  <th>Data</th>
-                </tr>
-              </thead>
-              <tbody>
+          {/* Version History */}
+          {document.versions && document.versions.length > 0 && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <History size={18} style={{ color: "var(--accent)" }} />
+                <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+                  Histórico de Versões
+                </h4>
+              </div>
+              <div className="space-y-2">
                 {[...document.versions].reverse().map((v) => (
-                  <tr key={v.id}>
-                    <td>
-                      <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                  <div
+                    key={v.id}
+                    className="flex items-center justify-between py-2 px-3"
+                    style={{
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--bg-main)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>
                         v{v.version_number}
                       </span>
-                    </td>
-                    <td>
                       <StatusBadge status={v.status} />
-                    </td>
-                    <td>
                       {v.ai_approved === true && (
-                        <CheckCircle2
-                          size={18}
-                          style={{ color: "var(--success)" }}
-                        />
+                        <CheckCircle2 size={14} style={{ color: "var(--success)" }} />
                       )}
                       {v.ai_approved === false && (
-                        <XCircle size={18} style={{ color: "var(--danger)" }} />
+                        <XCircle size={14} style={{ color: "var(--danger)" }} />
                       )}
-                      {v.ai_approved === null && (
-                        <Clock size={18} style={{ color: "var(--text-muted)" }} />
-                      )}
-                    </td>
-                    <td>
-                      <span style={{ color: "var(--text-secondary)", fontSize: 12.5 }}>
-                        {v.change_summary || "—"}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ color: "var(--text-secondary)" }}>
-                        {formatDateTime(v.submitted_at)}
-                      </span>
-                    </td>
-                  </tr>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {formatDateTime(v.submitted_at)}
+                    </span>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Activity timeline */}
+      {/* ═══ COLLAPSIBLE TIMELINE ═══ */}
       {(analysis || approvalChain) && (
         <div className="card" style={{ marginTop: 24 }}>
-          <div className="flex items-center gap-2" style={{ marginBottom: 16 }}>
-            <Clock size={20} style={{ color: "var(--accent)" }} />
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)" }}>
+          <button
+            onClick={() => setTimelineExpanded(!timelineExpanded)}
+            className="flex items-center gap-2 w-full"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            {timelineExpanded ? (
+              <ChevronDown size={18} style={{ color: "var(--accent)" }} />
+            ) : (
+              <ChevronRight size={18} style={{ color: "var(--accent)" }} />
+            )}
+            <Clock size={18} style={{ color: "var(--accent)" }} />
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
               Linha do Tempo
-            </h3>
-          </div>
-          <div style={{ position: "relative", paddingLeft: 24 }}>
-            {/* Vertical connector line */}
-            <div style={{
-              position: "absolute",
-              left: 7,
-              top: 8,
-              bottom: 8,
-              width: 2,
-              background: "var(--border)",
-            }} />
-            {[
-              document && {
-                label: "Documento submetido",
-                date: document.created_at,
-                color: "var(--accent)",
-              },
-              analysis && {
-                label: analysis.approved ? "IA aprovou o documento" : "IA identificou problemas no documento",
-                date: analysis.created_at,
-                color: analysis.approved ? "var(--success)" : "var(--danger)",
-              },
-              ...(textReview ? [{
-                label: textReview.status === "clean"
-                  ? "Revisão ortográfica concluída — sem erros"
-                  : "Revisão ortográfica realizada",
-                date: textReview.created_at,
-                color: "var(--accent)",
-              }] : []),
-              approvalChain && {
-                label: `Cadeia de aprovação criada (${approvalChain.approvers?.length ?? 0} aprovadores)`,
-                date: approvalChain.created_at,
-                color: "var(--accent)",
-              },
-              ...(approvalChain?.approvers ?? [])
-                .filter((a: any) => a.acted_at)
-                .map((a: any) => ({
-                  label: `${a.approver_name} ${a.action === "approve" ? "aprovou" : "rejeitou"}${a.comments ? `: "${a.comments}"` : ""}`,
-                  date: a.acted_at,
-                  color: a.action === "approve" ? "var(--success)" : "var(--danger)",
-                })),
-              approvalChain?.status === "approved" && {
-                label: "Documento aprovado e publicado",
-                date: approvalChain.completed_at || approvalChain.created_at,
-                color: "var(--success)",
-              },
-              approvalChain?.status === "rejected" && {
-                label: "Documento rejeitado pela cadeia de aprovação",
-                date: approvalChain.completed_at || approvalChain.created_at,
-                color: "var(--danger)",
-              },
-            ]
-              .filter(Boolean)
-              .sort((a: any, b: any) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
-              .map((event: any, idx: number) => (
-                <div key={idx} style={{ display: "flex", gap: 12, marginBottom: 16, position: "relative" }}>
-                  <div style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: "50%",
-                    flexShrink: 0,
-                    background: event.color,
-                    border: "3px solid var(--bg-card)",
-                    marginTop: 2,
-                  }} />
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", lineHeight: 1.4 }}>
-                      {event.label}
-                    </p>
-                    {event.date && (
-                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                        {new Date(event.date).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+            </h4>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 4 }}>
+              {timelineExpanded ? "" : "(clique para expandir)"}
+            </span>
+          </button>
+
+          {timelineExpanded && (
+            <div style={{ position: "relative", paddingLeft: 24, marginTop: 16 }}>
+              <div style={{
+                position: "absolute",
+                left: 7,
+                top: 8,
+                bottom: 8,
+                width: 2,
+                background: "var(--border)",
+              }} />
+              {[
+                document && {
+                  label: "Documento submetido",
+                  date: document.created_at,
+                  color: "var(--accent)",
+                },
+                analysis && {
+                  label: analysis.approved ? "IA aprovou o documento" : "IA identificou problemas no documento",
+                  date: analysis.created_at,
+                  color: analysis.approved ? "var(--success)" : "var(--danger)",
+                },
+                ...(textReview ? [{
+                  label: textReview.status === "clean"
+                    ? "Revisão ortográfica concluída — sem erros"
+                    : "Revisão ortográfica realizada",
+                  date: textReview.created_at,
+                  color: "var(--accent)",
+                }] : []),
+                approvalChain && {
+                  label: `Cadeia de aprovação criada (${approvalChain.approvers?.length ?? 0} aprovadores)`,
+                  date: approvalChain.created_at,
+                  color: "var(--accent)",
+                },
+                ...(approvalChain?.approvers ?? [])
+                  .filter((a: any) => a.acted_at)
+                  .map((a: any) => ({
+                    label: `${a.approver_name} ${a.action === "approve" ? "aprovou" : "rejeitou"}${a.comments ? `: "${a.comments}"` : ""}`,
+                    date: a.acted_at,
+                    color: a.action === "approve" ? "var(--success)" : "var(--danger)",
+                  })),
+                approvalChain?.status === "approved" && {
+                  label: "Documento aprovado e publicado",
+                  date: approvalChain.completed_at || approvalChain.created_at,
+                  color: "var(--success)",
+                },
+                approvalChain?.status === "rejected" && {
+                  label: "Documento rejeitado pela cadeia de aprovação",
+                  date: approvalChain.completed_at || approvalChain.created_at,
+                  color: "var(--danger)",
+                },
+              ]
+                .filter(Boolean)
+                .sort((a: any, b: any) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
+                .map((event: any, idx: number) => (
+                  <div key={idx} style={{ display: "flex", gap: 12, marginBottom: 16, position: "relative" }}>
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background: event.color,
+                      border: "3px solid var(--bg-card)",
+                      marginTop: 2,
+                    }} />
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                        {event.label}
                       </p>
-                    )}
+                      {event.date && (
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                          {new Date(event.date).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-          </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
     </div>

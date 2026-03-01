@@ -175,6 +175,17 @@ export async function skipAiApproval(code: string): Promise<void> {
   );
 }
 
+export async function retryAnalysis(
+  code: string
+): Promise<{ message: string; version_id: number }> {
+  return request(
+    `/api/documents/${encodeURIComponent(code)}/retry-analysis`,
+    {
+      method: "POST",
+    }
+  );
+}
+
 // ─── AI ──────────────────────────────────────────────────────
 
 export async function analyzeDocument(

@@ -246,6 +246,36 @@ async def skip_ai_approval(
     return {"message": "Document sent to workflow queue", "workflow_item_id": item.id}
 
 
+@router.post("/{code}/retry-analysis")
+async def retry_analysis(
+    code: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retry AI analysis for a document stuck in analysis_failed or draft state."""
+    doc = await document_service.get_document_by_code(db, code)
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Documento '{code}' não encontrado")
+
+    if doc.status not in ("analysis_failed", "draft", "analyzing"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Não é possível reiniciar análise para documento com status '{doc.status}'",
+        )
+
+    if not doc.versions:
+        raise HTTPException(status_code=400, detail="Documento não possui versões")
+
+    version = doc.versions[-1]
+    doc.status = "analyzing"
+    version.status = "analyzing"
+    await db.commit()
+
+    background_tasks.add_task(run_analysis_background, version.id)
+
+    return {"message": "Análise reiniciada", "version_id": version.id}
+
+
 @router.post("/{code}/publish")
 async def publish_document(
     code: str,

@@ -37,7 +37,6 @@ import { formatDateTime } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 import UnifiedAnalysisPanel from "@/components/UnifiedAnalysisPanel";
 import ChangelogViewer from "@/components/ChangelogViewer";
-import DocumentPreview from "@/components/DocumentPreview";
 import ApprovalChainView from "@/components/ApprovalChain";
 import DistributionPanel from "@/components/DistributionPanel";
 import { useToast } from "@/lib/toast-context";
@@ -58,6 +57,7 @@ export default function ProcessosReviewPage() {
   const [document, setDocument] = useState<DocumentWithVersions | null>(null);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [changelog, setChangelog] = useState<Changelog | null>(null);
+  const [currentVersionNumber, setCurrentVersionNumber] = useState<number>(1);
   const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
   const [textReviewHistory, setTextReviewHistory] = useState<TextReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,25 +77,28 @@ export default function ProcessosReviewPage() {
 
       if (doc.versions && doc.versions.length > 0) {
         const currentVersion = doc.versions[doc.versions.length - 1];
+        setCurrentVersionNumber(currentVersion.version_number);
         try {
           const anal = await getAnalysis(currentVersion.id);
           setAnalysis(anal);
         } catch {
           setAnalysis(null);
         }
-        try {
-          const cl = await getChangelog(currentVersion.id);
-          setChangelog(cl);
-        } catch (err: any) {
-          if (err?.status === 404) {
-            try {
-              const cl = await generateChangelog(currentVersion.id);
-              setChangelog(cl);
-            } catch {
+        if (currentVersion.version_number > 1) {
+          try {
+            const cl = await getChangelog(currentVersion.id);
+            setChangelog(cl);
+          } catch (err: any) {
+            if (err?.status === 404) {
+              try {
+                const cl = await generateChangelog(currentVersion.id);
+                setChangelog(cl);
+              } catch {
+                setChangelog(null);
+              }
+            } else {
               setChangelog(null);
             }
-          } else {
-            setChangelog(null);
           }
         }
         try {
@@ -420,7 +423,7 @@ export default function ProcessosReviewPage() {
             </h3>
           </div>
           <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-            Revise a análise da IA, o histórico de revisão textual e o changelog abaixo.
+            Revise a análise da IA, o histórico de revisão textual e as alterações da versão abaixo.
             Use os controles da Cadeia de Aprovação para registrar sua decisão.
           </p>
           <div className="flex gap-4" style={{ fontSize: 12, color: "var(--text-muted)" }}>
@@ -472,17 +475,10 @@ export default function ProcessosReviewPage() {
         </div>
       )}
 
-      {/* Changelog */}
-      {changelog && (
+      {/* Alterações da Versão — only for v2+ (document updates, not new documents) */}
+      {currentVersionNumber > 1 && changelog && (
         <div className="mb-6">
           <ChangelogViewer changelog={changelog} />
-        </div>
-      )}
-
-      {/* Document preview */}
-      {currentVersion?.extracted_text && (
-        <div className="mb-6">
-          <DocumentPreview text={currentVersion.extracted_text} />
         </div>
       )}
 

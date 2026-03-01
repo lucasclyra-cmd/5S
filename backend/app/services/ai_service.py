@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -368,13 +369,7 @@ async def run_analysis(db: AsyncSession, version_id: int) -> AIAnalysis:
                 "sections": changelog_result.get("diff_content", {}).get("sections", []),
             }
         elif version.version_number == 1:
-            # First version — generate initial changelog
-            changelog_result = await _call_with_fallback(
-                lambda client: changelog_agent.generate_changelog(client, text, None),
-                lambda: changelog_agent.get_mock_changelog(text, None),
-            )
-
-            # Remove existing changelog for this version (prevents duplicates on re-analysis)
+            # First version — no changelog needed, just a marker record
             existing_cls = await db.execute(
                 select(Changelog).where(Changelog.version_id == version_id)
             )
@@ -384,12 +379,11 @@ async def run_analysis(db: AsyncSession, version_id: int) -> AIAnalysis:
             cl = Changelog(
                 version_id=version_id,
                 previous_version_id=None,
-                diff_content=changelog_result.get("diff_content"),
-                summary=changelog_result.get("summary"),
+                diff_content={"sections": []},
+                summary="Primeira versão do documento — sem alterações para registrar.",
             )
             db.add(cl)
 
-            # Auto-fill change summary for first version
             version.change_summary = "Versão inicial do documento"
 
         # Cross-reference validation (PQ documents only)
@@ -808,28 +802,84 @@ async def run_changelog(db: AsyncSession, version_id: int) -> Changelog:
 # Background task wrapper for auto-analysis after upload
 # ──────────────────────────────────────────────────────────────
 
+ANALYSIS_TIMEOUT_SECONDS = 300  # 5 minutes
+
+
+async def _force_set_analysis_failed(version_id: int) -> None:
+    """Set analysis_failed status with progressively more robust methods."""
+    from app.database import async_session_factory
+
+    # Level 1: ORM update
+    try:
+        async with async_session_factory() as fallback_db:
+            ver = await _get_version(fallback_db, version_id)
+            ver.status = "analysis_failed"
+            if ver.document:
+                ver.document.status = "analysis_failed"
+            await fallback_db.commit()
+        return
+    except Exception as orm_err:
+        logger.error(
+            f"ORM fallback failed for version {version_id}: {orm_err}"
+        )
+
+    # Level 2: Raw SQL (bypasses ORM relationship issues)
+    try:
+        from sqlalchemy import text
+
+        async with async_session_factory() as raw_db:
+            await raw_db.execute(
+                text("UPDATE document_versions SET status = :s WHERE id = :v"),
+                {"s": "analysis_failed", "v": version_id},
+            )
+            await raw_db.execute(
+                text(
+                    "UPDATE documents SET status = :s WHERE id = "
+                    "(SELECT document_id FROM document_versions WHERE id = :v)"
+                ),
+                {"s": "analysis_failed", "v": version_id},
+            )
+            await raw_db.commit()
+        return
+    except Exception as raw_err:
+        logger.critical(
+            f"CRITICAL: Cannot set analysis_failed for version {version_id} "
+            f"even with raw SQL: {raw_err}"
+        )
+
+
 async def run_analysis_background(version_id: int) -> None:
     """Run AI analysis as a background task with its own DB session.
 
     Called from BackgroundTasks after document upload/resubmit.
     Creates a fresh session because the request session is already closed.
+    Includes a 5-minute timeout to prevent indefinitely stuck tasks.
     """
     from app.database import async_session_factory
 
-    async with async_session_factory() as db:
-        try:
-            await run_analysis(db, version_id)
-            await db.commit()
-        except Exception as e:
-            await db.rollback()
-            # Persist "analysis_failed" status in a clean session
+    try:
+        async with async_session_factory() as db:
             try:
-                async with async_session_factory() as fallback_db:
-                    ver = await _get_version(fallback_db, version_id)
-                    ver.status = "analysis_failed"
-                    if ver.document:
-                        ver.document.status = "analysis_failed"
-                    await fallback_db.commit()
-            except Exception:
-                pass
-            logger.error(f"Background analysis failed for version {version_id}: {e}")
+                await asyncio.wait_for(
+                    run_analysis(db, version_id),
+                    timeout=ANALYSIS_TIMEOUT_SECONDS,
+                )
+                await db.commit()
+            except asyncio.TimeoutError:
+                await db.rollback()
+                logger.error(
+                    f"Analysis timed out after {ANALYSIS_TIMEOUT_SECONDS}s "
+                    f"for version {version_id}"
+                )
+                await _force_set_analysis_failed(version_id)
+            except Exception as e:
+                await db.rollback()
+                logger.error(
+                    f"Background analysis failed for version {version_id}: {e}"
+                )
+                await _force_set_analysis_failed(version_id)
+    except Exception as outer_err:
+        logger.critical(
+            f"CRITICAL: Background task crashed for version {version_id}: {outer_err}"
+        )
+        await _force_set_analysis_failed(version_id)
