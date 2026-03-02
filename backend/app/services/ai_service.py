@@ -520,8 +520,12 @@ async def submit_user_text(
         # Spelling is clean — update version text and advance
         version.extracted_text = user_text
         version.status = "in_review"
+        if version.document:
+            version.document.status = "in_review"
     else:
         version.status = "spelling_review"
+        if version.document:
+            version.document.status = "spelling_review"
 
     await db.flush()
     return new_review
@@ -544,6 +548,8 @@ async def accept_text_and_advance(db: AsyncSession, version_id: int) -> TextRevi
 
     version.extracted_text = final_text
     version.status = "in_review"
+    if version.document:
+        version.document.status = "in_review"
     await db.flush()
 
     return current_review
@@ -730,11 +736,15 @@ async def run_formatting(db: AsyncSession, version_id: int) -> tuple[DocumentVer
                 pass
 
         version.status = "in_review"
+        if version.document:
+            version.document.status = "in_review"
         await db.flush()
 
         return version, formatting_method, formatting_warnings
     except Exception:
         version.status = "formatting_failed"
+        if version.document:
+            version.document.status = "formatting_failed"
         await db.flush()
         raise
 
